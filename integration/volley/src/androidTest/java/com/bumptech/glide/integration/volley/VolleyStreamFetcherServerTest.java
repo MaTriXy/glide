@@ -1,6 +1,13 @@
 package com.bumptech.glide.integration.volley;
 
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import android.os.SystemClock;
+
 import com.android.volley.NoConnectionError;
 import com.android.volley.RequestQueue;
 import com.android.volley.ServerError;
@@ -9,8 +16,11 @@ import com.android.volley.toolbox.Volley;
 import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.data.DataFetcher;
 import com.bumptech.glide.load.model.GlideUrl;
+import com.bumptech.glide.load.model.Headers;
+import com.bumptech.glide.testutil.TestUtil;
 import com.squareup.okhttp.mockwebserver.MockResponse;
 import com.squareup.okhttp.mockwebserver.MockWebServer;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -22,18 +32,13 @@ import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
 import org.robolectric.shadows.ShadowSystemClock;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.ProtocolException;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.instanceOf;
-import static org.junit.Assert.fail;
 
 /**
  * Tests {@link com.bumptech.glide.integration.volley.VolleyStreamFetcher} against server responses.
@@ -67,7 +72,7 @@ public class VolleyStreamFetcherServerTest {
                 .setResponseCode(200));
         DataFetcher<InputStream> fetcher = getFetcher();
         InputStream is = fetcher.loadData(Priority.HIGH);
-        assertThat(isToString(is), equalTo(expected));
+        assertEquals(expected, TestUtil.isToString(is));
     }
 
     @Test
@@ -80,7 +85,7 @@ public class VolleyStreamFetcherServerTest {
             .setResponseCode(200)
             .setBody(expected));
         InputStream is = getFetcher().loadData(Priority.LOW);
-        assertThat(isToString(is), equalTo(expected));
+        assertEquals(expected, TestUtil.isToString(is));
     }
 
     @Test
@@ -93,7 +98,7 @@ public class VolleyStreamFetcherServerTest {
             .setResponseCode(200)
             .setBody(expected));
         InputStream is = getFetcher().loadData(Priority.LOW);
-        assertThat(isToString(is), equalTo(expected));
+        assertEquals(expected, TestUtil.isToString(is));
     }
 
     @Test
@@ -110,11 +115,11 @@ public class VolleyStreamFetcherServerTest {
             .setResponseCode(200).setBody(expected));
 
         InputStream is = getFetcher().loadData(Priority.NORMAL);
-        assertThat(isToString(is), equalTo(expected));
+        assertEquals(expected, TestUtil.isToString(is));
 
-        assertThat(mockWebServer.takeRequest().getPath(), containsString(DEFAULT_PATH));
+        assertThat(mockWebServer.takeRequest().getPath()).contains(DEFAULT_PATH);
         for (int i = 0; i < numRedirects; i++) {
-            assertThat(mockWebServer.takeRequest().getPath(), containsString(redirectBase + i));
+            assertThat(mockWebServer.takeRequest().getPath()).contains(redirectBase + i);
         }
     }
 
@@ -128,7 +133,7 @@ public class VolleyStreamFetcherServerTest {
             getFetcher().loadData(Priority.NORMAL);
             fail("Didn't get expected IOException");
         } catch (ExecutionException e) {
-            assertThat(e.getCause(), instanceOf(VolleyError.class));
+            assertThat(e.getCause()).isInstanceOf(VolleyError.class);
         }
     }
 
@@ -139,7 +144,7 @@ public class VolleyStreamFetcherServerTest {
             getFetcher().loadData(Priority.LOW);
             fail("Failed to get expected exception");
         } catch (ExecutionException e) {
-            assertThat(e.getCause(), instanceOf(NoConnectionError.class));
+            assertThat(e.getCause()).isInstanceOf(NoConnectionError.class);
         }
     }
 
@@ -154,8 +159,8 @@ public class VolleyStreamFetcherServerTest {
             getFetcher().loadData(Priority.NORMAL);
             fail("Failed to get expected exception");
         } catch (ExecutionException e) {
-            assertThat(e.getCause(), instanceOf(NoConnectionError.class));
-            assertThat(e.getCause().getCause(), instanceOf(ProtocolException.class));
+            assertThat(e.getCause()).isInstanceOf(NoConnectionError.class);
+            assertThat(e.getCause().getCause()).isInstanceOf(ProtocolException.class);
         }
     }
 
@@ -167,7 +172,7 @@ public class VolleyStreamFetcherServerTest {
             getFetcher().loadData(Priority.NORMAL);
             fail("Failed to get expected exception");
         } catch (ExecutionException e) {
-            assertThat(e.getCause(), instanceOf(ServerError.class));
+            assertThat(e.getCause()).isInstanceOf(ServerError.class);
         }
     }
 
@@ -178,11 +183,30 @@ public class VolleyStreamFetcherServerTest {
             getFetcher().loadData(Priority.LOW);
             fail("Failed to get expected exception");
         } catch (ExecutionException e) {
-            assertThat(e.getCause(), instanceOf(ServerError.class));
+            assertThat(e.getCause()).isInstanceOf(ServerError.class);
         }
     }
 
+    @Test
+    public void testAppliesHeadersInGlideUrl() throws Exception {
+      mockWebServer.enqueue(new MockResponse().setResponseCode(200));
+      String headerField = "field";
+      String headerValue = "value";
+      Map<String, String> headersMap = new HashMap<String, String>();
+      headersMap.put(headerField, headerValue);
+      Headers headers = mock(Headers.class);
+      when(headers.getHeaders()).thenReturn(headersMap);
+
+      getFetcher(headers).loadData(Priority.HIGH);
+
+      assertThat(mockWebServer.takeRequest().getHeader(headerField)).isEqualTo(headerValue);
+    }
+
     private DataFetcher<InputStream> getFetcher() {
+      return getFetcher(Headers.NONE);
+    }
+
+    private DataFetcher<InputStream> getFetcher(Headers headers) {
         URL url = mockWebServer.getUrl(DEFAULT_PATH);
         VolleyRequestFuture<InputStream> requestFuture = new VolleyRequestFuture<InputStream>() {
             @Override
@@ -197,17 +221,7 @@ public class VolleyStreamFetcherServerTest {
                 return super.get();
             }
         };
-        return new VolleyStreamFetcher(requestQueue, new GlideUrl(url.toString()), requestFuture);
-    }
-
-    private static String isToString(InputStream is) throws IOException {
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        int read;
-        while ((read = is.read(buffer)) != -1) {
-            os.write(buffer, 0, read);
-        }
-        return new String(os.toByteArray());
+        return new VolleyStreamFetcher(requestQueue, new GlideUrl(url.toString(), headers), requestFuture);
     }
 
     /** A shadow clock that doesn't rely on running on an Android thread with a Looper. */

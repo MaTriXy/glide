@@ -1,5 +1,7 @@
 package com.bumptech.glide.request.target;
 
+import static org.junit.Assert.assertEquals;
+
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.widget.ImageView;
@@ -9,10 +11,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
-
-import static org.junit.Assert.assertEquals;
+import org.robolectric.annotation.Config;
 
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class BitmapImageViewTargetTest {
 
     private ImageView view;

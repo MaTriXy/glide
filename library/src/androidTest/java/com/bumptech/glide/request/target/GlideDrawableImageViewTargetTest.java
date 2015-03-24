@@ -1,5 +1,15 @@
 package com.bumptech.glide.request.target;
 
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.drawable.BitmapDrawable;
@@ -14,20 +24,10 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
-
-import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.robolectric.annotation.Config;
 
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class GlideDrawableImageViewTargetTest {
 
     @Test
@@ -66,7 +66,7 @@ public class GlideDrawableImageViewTargetTest {
             @Override
             public Object answer(InvocationOnMock invocation) throws Throwable {
                 Drawable drawable = (Drawable) invocation.getArguments()[0];
-                assertThat(drawable, instanceOf(SquaringDrawable.class));
+                assertThat(drawable).isInstanceOf(SquaringDrawable.class);
                 return null;
             }
         }).when(mockView).setImageDrawable(any(Drawable.class));
@@ -96,7 +96,7 @@ public class GlideDrawableImageViewTargetTest {
             @Override
             public Object answer(InvocationOnMock invocation) throws Throwable {
                 Drawable drawable = (Drawable) invocation.getArguments()[0];
-                assertThat(drawable, not(instanceOf(SquaringDrawable.class)));
+                assertThat(drawable).isNotInstanceOf(SquaringDrawable.class);
                 return null;
             }
         }).when(mockView).setImageDrawable(any(Drawable.class));
@@ -126,7 +126,7 @@ public class GlideDrawableImageViewTargetTest {
             @Override
             public Object answer(InvocationOnMock invocation) throws Throwable {
                 Drawable drawable = (Drawable) invocation.getArguments()[0];
-                assertThat(drawable, not(instanceOf(SquaringDrawable.class)));
+                assertThat(drawable).isNotInstanceOf(SquaringDrawable.class);
                 return null;
             }
         }).when(mockView).setImageDrawable(any(Drawable.class));
@@ -156,7 +156,7 @@ public class GlideDrawableImageViewTargetTest {
             @Override
             public Object answer(InvocationOnMock invocation) throws Throwable {
                 Drawable drawable = (Drawable) invocation.getArguments()[0];
-                assertThat(drawable, not(instanceOf(SquaringDrawable.class)));
+                assertThat(drawable).isNotInstanceOf(SquaringDrawable.class);
                 return null;
             }
         }).when(mockView).setImageDrawable(any(Drawable.class));

@@ -1,10 +1,21 @@
 package com.bumptech.glide.load.resource.gif;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import android.graphics.Bitmap;
+
 import com.bumptech.glide.gifdecoder.GifDecoder;
 import com.bumptech.glide.gifdecoder.GifHeader;
 import com.bumptech.glide.gifdecoder.GifHeaderParser;
-import com.bumptech.glide.load.DecodeFormat;
 import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
 import com.bumptech.glide.tests.GlideShadowLooper;
 
@@ -20,19 +31,8 @@ import org.robolectric.annotation.Config;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @RunWith(RobolectricTestRunner.class)
-@Config(shadows = GlideShadowLooper.class)
+@Config(manifest = Config.NONE, emulateSdk = 18, shadows = GlideShadowLooper.class)
 public class GifResourceDecoderTest {
     private GifResourceDecoder decoder;
     private GifHeaderParser parser;
@@ -55,8 +55,7 @@ public class GifResourceDecoderTest {
         decoderPool = mock(GifResourceDecoder.GifDecoderPool.class);
         when(decoderPool.obtain(any(GifDecoder.BitmapProvider.class))).thenReturn(gifDecoder);
 
-        decoder = new GifResourceDecoder(Robolectric.application, bitmapPool, DecodeFormat.PREFER_RGB_565,
-                parserPool, decoderPool);
+        decoder = new GifResourceDecoder(Robolectric.application, bitmapPool, parserPool, decoderPool);
     }
 
     @Test
@@ -99,23 +98,6 @@ public class GifResourceDecoderTest {
         verify(parserPool).release(eq(parser));
     }
 
-
-    @Test
-    public void testSetsPreferredConfigOnDecoderBeforeDecoding() {
-        when(gifHeader.getNumFrames()).thenReturn(1);
-        when(gifHeader.getStatus()).thenReturn(GifDecoder.STATUS_OK);
-        when(gifDecoder.getNextFrame()).thenReturn(Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888));
-
-        decoder = new GifResourceDecoder(Robolectric.application, mock(BitmapPool.class), DecodeFormat.ALWAYS_ARGB_8888,
-                parserPool, decoderPool);
-
-        decoder.decode(new ByteArrayInputStream(new byte[0]), 100, 100);
-
-        InOrder order = inOrder(gifDecoder);
-        order.verify(gifDecoder).setPreferredConfig(eq(Bitmap.Config.ARGB_8888));
-        order.verify(gifDecoder).getNextFrame();
-    }
-
     @Test
     public void testDecodesFirstFrameAndReturnsGifDecoderToPool() {
         when(gifHeader.getNumFrames()).thenReturn(1);
@@ -127,7 +109,7 @@ public class GifResourceDecoderTest {
 
         InOrder order = inOrder(decoderPool, gifDecoder);
         order.verify(decoderPool).obtain(any(GifDecoder.BitmapProvider.class));
-        order.verify(gifDecoder).setData(any(String.class), eq(gifHeader), eq(data));
+        order.verify(gifDecoder).setData(eq(gifHeader), eq(data));
         order.verify(gifDecoder).advance();
         order.verify(gifDecoder).getNextFrame();
         order.verify(decoderPool).release(eq(gifDecoder));
@@ -144,6 +126,26 @@ public class GifResourceDecoderTest {
         } catch (RuntimeException e) {
             // Expected.
         }
+
+        verify(decoderPool).release(eq(gifDecoder));
+    }
+
+    @Test
+    public void testReturnsNullIfGifDecoderFailsToDecodeFirstFrame() {
+        when(gifHeader.getNumFrames()).thenReturn(1);
+        when(gifHeader.getStatus()).thenReturn(GifDecoder.STATUS_OK);
+        when(gifDecoder.getNextFrame()).thenReturn(null);
+
+        assertNull(decoder.decode(new ByteArrayInputStream(new byte[0]), 100, 100));
+    }
+
+    @Test
+    public void testReturnsGifDecoderToPoolWhenGifDecoderReturnsNullFirstFrame() {
+        when(gifHeader.getNumFrames()).thenReturn(1);
+        when(gifHeader.getStatus()).thenReturn(GifDecoder.STATUS_OK);
+        when(gifDecoder.getNextFrame()).thenReturn(null);
+
+        decoder.decode(new ByteArrayInputStream(new byte[0]), 100, 100);
 
         verify(decoderPool).release(eq(gifDecoder));
     }

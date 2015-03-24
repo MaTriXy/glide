@@ -1,20 +1,26 @@
 package com.bumptech.glide.load.engine.executor;
 
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+
+import com.google.common.testing.EqualsTester;
+
+import com.bumptech.glide.load.engine.executor.FifoPriorityThreadPoolExecutor.LoadTask;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-import static org.hamcrest.Matchers.contains;
-import static org.hamcrest.Matchers.hasSize;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
-
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class FifoPriorityThreadPoolExecutorTest {
 
     @Test
@@ -31,9 +37,10 @@ public class FifoPriorityThreadPoolExecutorTest {
             }));
         }
 
-        executor.awaitTermination(200, TimeUnit.MILLISECONDS);
+        executor.shutdown();
+        executor.awaitTermination(500, TimeUnit.MILLISECONDS);
 
-        assertThat(resultPriorities, hasSize(numPrioritiesToTest));
+        assertThat(resultPriorities).hasSize(numPrioritiesToTest);
 
         // Since no jobs are queued, the first item added will be run immediately, regardless of priority.
         assertEquals(numPrioritiesToTest, resultPriorities.get(0).intValue());
@@ -46,11 +53,11 @@ public class FifoPriorityThreadPoolExecutorTest {
     @Test
     public void testLoadsWithSamePriorityAreExecutedInSubmitOrder() throws InterruptedException {
         final int numItemsToTest = 10;
-        final Integer[] executionOrder = new Integer[numItemsToTest];
+        final List<Integer> executionOrder = new ArrayList<Integer>();
         final List<Integer> executedOrder = Collections.synchronizedList(new ArrayList<Integer>());
         FifoPriorityThreadPoolExecutor executor = new FifoPriorityThreadPoolExecutor(1);
         for (int i = 0; i < numItemsToTest; i++) {
-            executionOrder[i] = i;
+            executionOrder.add(i);
         }
         for (int i = 0; i < numItemsToTest; i++) {
             final int finalI = i;
@@ -64,7 +71,49 @@ public class FifoPriorityThreadPoolExecutorTest {
         }
         executor.awaitTermination(200, TimeUnit.MILLISECONDS);
 
-        assertThat(executedOrder, contains(executionOrder));
+        assertThat(executedOrder).containsAllIn(executionOrder).inOrder();
+    }
+
+    @Test
+    public void testLoadTaskEquality() {
+        new EqualsTester()
+                .addEqualityGroup(
+                        new LoadTask<Object>(new MockRunnable(10), new Object(), 1),
+                        new LoadTask<Object>(new MockRunnable(10), new Object(), 1))
+                .addEqualityGroup(
+                        new LoadTask<Object>(new MockRunnable(5), new Object(), 1)
+                )
+                .addEqualityGroup(
+                        new LoadTask<Object>(new MockRunnable(10), new Object(), 3)
+                )
+                .testEquals();
+    }
+
+    @Test
+    public void testLoadTaskCompareToPrefersHigherPriority() {
+        LoadTask<Object> first = new LoadTask<Object>(new MockRunnable(10), new Object(), 10);
+        LoadTask<Object> second = new LoadTask<Object>(new MockRunnable(0), new Object(), 10);
+
+        assertTrue(first.compareTo(second) > 0);
+        assertTrue(second.compareTo(first) < 0);
+    }
+
+    @Test
+    public void testLoadTaskCompareToFallsBackToOrderIfPriorityIsEqual() {
+        LoadTask<Object> first = new LoadTask<Object>(new MockRunnable(0), new Object(), 2);
+        LoadTask<Object> second = new LoadTask<Object>(new MockRunnable(0), new Object(), 1);
+
+        assertTrue(first.compareTo(second) > 0);
+        assertTrue(second.compareTo(first) < 0);
+    }
+
+    @Test
+    public void testLoadTaskCompareToReturnsZeroIfPriorityAndOrderAreEqual() {
+        LoadTask<Object> first = new LoadTask<Object>(new MockRunnable(0), new Object(), 1);
+        LoadTask<Object> second = new LoadTask<Object>(new MockRunnable(0), new Object(), 1);
+
+        assertEquals(0, first.compareTo(second));
+        assertEquals(0, second.compareTo(first));
     }
 
     private static class MockRunnable implements Runnable, Prioritized {
@@ -73,6 +122,10 @@ public class FifoPriorityThreadPoolExecutorTest {
 
         public interface OnRun {
             public void onRun(int priority);
+        }
+
+        public MockRunnable(int priority) {
+            this(priority, mock(OnRun.class));
         }
 
         public MockRunnable(int priority, OnRun onRun) {

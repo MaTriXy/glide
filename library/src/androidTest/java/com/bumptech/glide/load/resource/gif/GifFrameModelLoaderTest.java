@@ -1,16 +1,19 @@
 package com.bumptech.glide.load.resource.gif;
 
-import com.bumptech.glide.Priority;
-import com.bumptech.glide.gifdecoder.GifDecoder;
-import org.junit.Before;
-import org.junit.Test;
-
-import static org.hamcrest.Matchers.containsString;
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.bumptech.glide.Priority;
+import com.bumptech.glide.gifdecoder.GifDecoder;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+@RunWith(JUnit4.class)
 public class GifFrameModelLoaderTest {
     private GifFrameModelLoader loader;
     private GifDecoder decoder;
@@ -22,16 +25,14 @@ public class GifFrameModelLoaderTest {
     }
 
     @Test
-    public void testFetcherIdIncludesGifDecoderIdAndFrameIndex() {
+    public void testFetcherIdIncludesFrameIndex() {
         String id = "asdfasd";
         int frameIndex = 124;
-        when(decoder.getId()).thenReturn(id);
         when(decoder.getCurrentFrameIndex()).thenReturn(frameIndex);
 
         String fetcherId = loader.getResourceFetcher(decoder, 1, 2).getId();
 
-        assertThat(fetcherId, containsString(id));
-        assertThat(fetcherId, containsString(String.valueOf(frameIndex)));
+        assertThat(fetcherId).contains(String.valueOf(frameIndex));
     }
 
     @Test

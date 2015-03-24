@@ -15,21 +15,20 @@ import com.bumptech.glide.load.engine.Resource;
  */
 public abstract class DrawableResource<T extends Drawable> implements Resource<T> {
     protected final T drawable;
-    private boolean returnedOriginalDrawable;
 
     public DrawableResource(T drawable) {
+        if (drawable == null) {
+            throw new NullPointerException("Drawable must not be null!");
+        }
         this.drawable = drawable;
     }
 
     @SuppressWarnings("unchecked")
-    // drawables should always return a copy of the same class
     @Override
     public final T get() {
-        if (!returnedOriginalDrawable) {
-            returnedOriginalDrawable = true;
-            return drawable;
-        } else {
-            return (T) drawable.getConstantState().newDrawable();
-        }
+        // Drawables contain temporary state related to how they're being displayed (alpha, color filter etc), so
+        // return a new copy each time. If we ever return the original drawable, it's temporary state may be changed
+        // and subsequent copies may end up with that temporary state. See #276.
+        return (T) drawable.getConstantState().newDrawable();
     }
 }

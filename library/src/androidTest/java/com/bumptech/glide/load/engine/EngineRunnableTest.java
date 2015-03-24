@@ -1,14 +1,5 @@
 package com.bumptech.glide.load.engine;
 
-import com.bumptech.glide.Priority;
-import com.bumptech.glide.request.ResourceCallback;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-import org.robolectric.RobolectricTestRunner;
-
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -18,7 +9,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.bumptech.glide.Priority;
+import com.bumptech.glide.request.ResourceCallback;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class EngineRunnableTest {
 
     private EngineRunnable.EngineRunnableManager manager;
@@ -193,5 +196,36 @@ public class EngineRunnableTest {
         runnable.run();
 
         verify(manager, never()).onException(any(Exception.class));
+    }
+
+    @Test
+    public void testDoesNotNotifyManagerOfSuccessIfCancelled() throws Exception {
+        runnable.run();
+        when(job.decodeFromSource()).thenAnswer(new Answer<Object>() {
+            @Override
+            public Object answer(InvocationOnMock invocationOnMock) throws Throwable {
+                runnable.cancel();
+                return mock(Resource.class);
+            }
+        });
+        runnable.run();
+
+        verify(manager, never()).onResourceReady(any(Resource.class));
+    }
+
+    @Test
+    public void testRecyclesResourceIfAvailableWhenCancelled() throws Exception {
+        final Resource resource = mock(Resource.class);
+        runnable.run();
+        when(job.decodeFromSource()).thenAnswer(new Answer<Object>() {
+            @Override
+            public Object answer(InvocationOnMock invocationOnMock) throws Throwable {
+                runnable.cancel();
+                return resource;
+            }
+        });
+        runnable.run();
+
+        verify(resource).recycle();
     }
 }

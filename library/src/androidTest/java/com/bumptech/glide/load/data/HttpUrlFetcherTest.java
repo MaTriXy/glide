@@ -1,17 +1,5 @@
 package com.bumptech.glide.load.data;
 
-import com.bumptech.glide.Priority;
-import com.bumptech.glide.load.model.GlideUrl;
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.InOrder;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.mockito.Matchers.eq;
@@ -21,6 +9,22 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.bumptech.glide.Priority;
+import com.bumptech.glide.load.model.GlideUrl;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.InOrder;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+@RunWith(JUnit4.class)
 public class HttpUrlFetcherTest {
     private HttpURLConnection urlConnection;
     private HttpUrlFetcher fetcher;
@@ -45,7 +49,7 @@ public class HttpUrlFetcherTest {
     @Test
     public void testReturnsModelAsString() {
         final String expected = "fakeId";
-        when(glideUrl.toString()).thenReturn(expected);
+        when(glideUrl.getCacheKey()).thenReturn(expected);
         assertEquals(expected, fetcher.getId());
     }
 

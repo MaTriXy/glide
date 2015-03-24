@@ -1,11 +1,5 @@
 package com.bumptech.glide.load.engine;
 
-import com.bumptech.glide.load.Key;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -15,7 +9,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.bumptech.glide.load.Key;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class EngineResourceTest {
     private EngineResource<Object> engineResource;
     private EngineResource.ResourceListener listener;
@@ -134,6 +137,11 @@ public class EngineResourceTest {
         engineResource.acquire();
         engineResource.release();
         engineResource.release();
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testThrowsIfWrappedResourceIsNull() {
+        new EngineResource<Object>(null, false);
     }
 
     @Test

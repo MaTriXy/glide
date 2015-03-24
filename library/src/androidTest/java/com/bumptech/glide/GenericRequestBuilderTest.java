@@ -1,6 +1,14 @@
 package com.bumptech.glide;
 
+import static com.bumptech.glide.tests.BackgroundUtil.testInBackground;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import android.widget.ImageView;
+
 import com.bumptech.glide.load.ResourceDecoder;
 import com.bumptech.glide.load.ResourceEncoder;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
@@ -11,21 +19,17 @@ import com.bumptech.glide.request.Request;
 import com.bumptech.glide.request.animation.GlideAnimationFactory;
 import com.bumptech.glide.request.target.Target;
 import com.bumptech.glide.tests.BackgroundUtil;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
-
-import static com.bumptech.glide.tests.BackgroundUtil.testInBackground;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import org.robolectric.annotation.Config;
 
 @SuppressWarnings("unchecked")
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class GenericRequestBuilderTest {
     private RequestTracker requestTracker;
 
@@ -72,9 +76,42 @@ public class GenericRequestBuilderTest {
     }
 
     @Test
+    public void testDoesNotThrowWhenWidthIsSizeOriginal() {
+        getNullModelRequest().override(Target.SIZE_ORIGINAL, 100);
+    }
+
+    @Test
+    public void testDoesNotThrowWhenHeightIsSizeOriginal() {
+        getNullModelRequest().override(100, Target.SIZE_ORIGINAL);
+    }
+
+    @Test
     public void testDoesNotThrowWhenModelAndLoaderNull() {
         new GenericRequestBuilder(Robolectric.application, null, null, Object.class, mock(Glide.class), requestTracker,
                 mock(Lifecycle.class));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testProvidingSelfAsThumbnailThrows() {
+        GenericRequestBuilder request = getNullModelRequest();
+        request.thumbnail(request);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testProvidingSelfAsChildOfThumbnailThrows() {
+        GenericRequestBuilder first = getNullModelRequest();
+        GenericRequestBuilder second = first.clone();
+        second.thumbnail(first);
+        first.thumbnail(second);
+        first.into(mock(Target.class));
+    }
+
+    @Test
+    public void testCanPassedClonedSelfToThumbnail() {
+        GenericRequestBuilder first = getNullModelRequest();
+        GenericRequestBuilder second = first.clone();
+        GenericRequestBuilder third = second.clone();
+        first.thumbnail(second.thumbnail(third)).into(mock(Target.class));
     }
 
     @Test

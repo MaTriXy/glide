@@ -1,36 +1,45 @@
 package com.bumptech.glide.load.engine.bitmap_recycle;
 
+import static com.google.common.truth.Truth.assertThat;
+import static android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND;
+import static android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE;
+import static android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import android.graphics.Bitmap;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowBitmap;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
-
-import static android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND;
-import static android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE;
-import static android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE;
-import static org.hamcrest.Matchers.empty;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
+import java.util.Set;
 
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class LruBitmapPoolTest {
     private static final int MAX_SIZE = 10;
+    private static final Set<Bitmap.Config> ALLOWED_CONFIGS = Collections.singleton(Bitmap.Config.ARGB_8888);
     private MockStrategy strategy;
     private LruBitmapPool pool;
 
     @Before
     public void setUp() throws Exception {
         strategy = new MockStrategy();
-        pool = new LruBitmapPool(MAX_SIZE, strategy);
+        pool = new LruBitmapPool(MAX_SIZE, strategy, ALLOWED_CONFIGS);
     }
 
     @Test
@@ -45,7 +54,7 @@ public class LruBitmapPoolTest {
         Bitmap bitmap = createMutableBitmap();
         Robolectric.shadowOf(bitmap).setMutable(false);
         pool.put(bitmap);
-        assertThat(strategy.bitmaps, empty());
+        assertThat(strategy.bitmaps).isEmpty();
     }
 
     @Test
@@ -62,7 +71,7 @@ public class LruBitmapPoolTest {
                 return 4;
             }
         };
-        pool = new LruBitmapPool(3, strategy);
+        pool = new LruBitmapPool(3, strategy, ALLOWED_CONFIGS);
         pool.put(createMutableBitmap());
         assertEquals(0, strategy.numRemoves);
         assertEquals(0, strategy.numPuts);
@@ -108,9 +117,33 @@ public class LruBitmapPoolTest {
         }
     }
 
+    @Test
+    public void testPassesArgb888ToStrategyAsConfigForRequestsWithNullConfigsOnGet() {
+        LruPoolStrategy strategy = mock(LruPoolStrategy.class);
+        LruBitmapPool pool = new LruBitmapPool(100, strategy, ALLOWED_CONFIGS);
+
+        Bitmap expected = createMutableBitmap();
+        when(strategy.get(anyInt(), anyInt(), eq(Bitmap.Config.ARGB_8888))).thenReturn(expected);
+        Bitmap result = pool.get(100, 100, null);
+
+        assertEquals(expected, result);
+    }
+
+    @Test
+    public void testPassesArgb8888ToStrategyAsConfigForRequestsWithNullConfigsOnGetDirty() {
+        LruPoolStrategy strategy = mock(LruPoolStrategy.class);
+        LruBitmapPool pool = new LruBitmapPool(100, strategy, ALLOWED_CONFIGS);
+
+        Bitmap expected = createMutableBitmap();
+        when(strategy.get(anyInt(), anyInt(), eq(Bitmap.Config.ARGB_8888))).thenReturn(expected);
+        Bitmap result = pool.getDirty(100, 100, null);
+
+        assertEquals(expected, result);
+    }
+
     private void testTrimMemory(int fillSize, int trimLevel, int expectedSize) {
         MockStrategy strategy = new MockStrategy();
-        LruBitmapPool pool = new LruBitmapPool(MAX_SIZE, strategy);
+        LruBitmapPool pool = new LruBitmapPool(MAX_SIZE, strategy, ALLOWED_CONFIGS);
         fillPool(pool, fillSize);
         pool.trimMemory(trimLevel);
         assertEquals("Failed level=" + trimLevel, expectedSize, strategy.numRemoves);
@@ -158,6 +191,28 @@ public class LruBitmapPoolTest {
         assertEquals(2 * MAX_SIZE, pool.getMaxSize());
     }
 
+    @Test
+    public void testBitmapsWithDisallowedConfigsAreIgnored() {
+        pool = new LruBitmapPool(100, strategy, Collections.singleton(Bitmap.Config.ARGB_4444));
+
+        Bitmap bitmap = createMutableBitmap(Bitmap.Config.RGB_565);
+        pool.put(bitmap);
+
+        assertEquals(0, strategy.numPuts);
+    }
+
+    @Test
+    public void testBitmapsWithAllowedNullConfigsAreAllowed() {
+        pool = new LruBitmapPool(100, strategy, Collections.<Bitmap.Config>singleton(null));
+
+        Bitmap bitmap = createMutableBitmap();
+        Robolectric.shadowOf(bitmap).setConfig(null);
+
+        pool.put(bitmap);
+
+        assertEquals(1, strategy.numPuts);
+    }
+
     private void fillPool(LruBitmapPool pool, int fillCount) {
         for (int i = 0; i < fillCount; i++) {
             pool.put(createMutableBitmap());
@@ -165,9 +220,14 @@ public class LruBitmapPoolTest {
     }
 
     private Bitmap createMutableBitmap() {
-        Bitmap bitmap = ShadowBitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888);
+        return createMutableBitmap(Bitmap.Config.ARGB_8888);
+    }
+
+    private Bitmap createMutableBitmap(Bitmap.Config config) {
+        Bitmap bitmap = ShadowBitmap.createBitmap(100, 100, config);
         Robolectric.shadowOf(bitmap).setMutable(true);
         return bitmap;
+
     }
 
     private static class MockStrategy implements LruPoolStrategy {

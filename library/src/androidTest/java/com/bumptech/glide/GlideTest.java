@@ -1,5 +1,17 @@
 package com.bumptech.glide;
 
+import static org.junit.Assert.assertNotNull;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.notNull;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.res.AssetFileDescriptor;
@@ -13,6 +25,7 @@ import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+
 import com.bumptech.glide.load.Encoder;
 import com.bumptech.glide.load.ResourceDecoder;
 import com.bumptech.glide.load.ResourceEncoder;
@@ -33,12 +46,15 @@ import com.bumptech.glide.load.resource.gif.GifDrawable;
 import com.bumptech.glide.load.resource.gifbitmap.GifBitmapWrapper;
 import com.bumptech.glide.load.resource.transcode.ResourceTranscoder;
 import com.bumptech.glide.manager.Lifecycle;
+import com.bumptech.glide.manager.RequestManagerTreeNode;
 import com.bumptech.glide.request.Request;
 import com.bumptech.glide.request.RequestListener;
 import com.bumptech.glide.request.animation.GlideAnimation;
 import com.bumptech.glide.request.target.SizeReadyCallback;
 import com.bumptech.glide.request.target.Target;
 import com.bumptech.glide.tests.GlideShadowLooper;
+import com.bumptech.glide.testutil.TestResourceUtil;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -50,6 +66,7 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.Implementation;
 import org.robolectric.annotation.Implements;
+import org.robolectric.annotation.Resetter;
 import org.robolectric.shadows.ShadowBitmap;
 
 import java.io.ByteArrayInputStream;
@@ -64,24 +81,12 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 
-import static org.junit.Assert.assertNotNull;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyObject;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.notNull;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 /**
  * Tests for the {@link Glide} interface and singleton.
  */
 @RunWith(RobolectricTestRunner.class)
-@Config(shadows = { GlideTest.ShadowFileDescriptorContentResolver.class, GlideTest.ShadowMediaMetadataRetriever.class,
-        GlideShadowLooper.class, GlideTest.MutableShadowBitmap.class })
+@Config(manifest = Config.NONE, emulateSdk = 18, shadows = { GlideTest.ShadowFileDescriptorContentResolver.class,
+        GlideTest.ShadowMediaMetadataRetriever.class, GlideShadowLooper.class, GlideTest.MutableShadowBitmap.class })
 public class GlideTest {
     private Target target = null;
     private ImageView imageView;
@@ -133,7 +138,8 @@ public class GlideTest {
 
         Glide.get(getContext()).register(GlideUrl.class, InputStream.class, mockUrlLoaderFactory);
         Lifecycle lifecycle = mock(Lifecycle.class);
-        requestManager = new RequestManager(getContext(), lifecycle);
+        RequestManagerTreeNode treeNode = mock(RequestManagerTreeNode.class);
+        requestManager = new RequestManager(getContext(), lifecycle, treeNode);
         requestManager.resumeRequests();
     }
 
@@ -778,7 +784,7 @@ public class GlideTest {
 
 
     private InputStream openResource(String imageName) throws IOException {
-        return getClass().getResourceAsStream("/" + imageName);
+        return TestResourceUtil.openResource(getClass(), imageName);
     }
 
     private static class CallCallback implements Answer<Void> {
@@ -806,7 +812,7 @@ public class GlideTest {
     // one content resolver shadow in one part of the test and a different one in a different part of the test. Each
     // one ends up with different registered uris, which causes tests to fail. We shouldn't need to do this, but
     // using static maps seems to fix the issue.
-    @Implements(value = ContentResolver.class, resetStaticState = true)
+    @Implements(value = ContentResolver.class)
     public static class ShadowFileDescriptorContentResolver {
         private static final Map<Uri, AssetFileDescriptor> URI_TO_FILE_DESCRIPTOR =
                 new HashMap<Uri, AssetFileDescriptor>();
@@ -836,6 +842,7 @@ public class GlideTest {
             return URI_TO_FILE_DESCRIPTOR.get(uri);
         }
 
+        @Resetter
         public static void reset() {
             URI_TO_INPUT_STREAMS.clear();
             URI_TO_FILE_DESCRIPTOR.clear();

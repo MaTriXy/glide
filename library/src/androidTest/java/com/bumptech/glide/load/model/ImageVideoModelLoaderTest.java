@@ -1,18 +1,5 @@
 package com.bumptech.glide.load.model;
 
-import android.net.Uri;
-import android.os.ParcelFileDescriptor;
-import com.bumptech.glide.Priority;
-import com.bumptech.glide.load.data.DataFetcher;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
@@ -22,7 +9,24 @@ import static org.mockito.Matchers.anyObject;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import android.net.Uri;
+import android.os.ParcelFileDescriptor;
+
+import com.bumptech.glide.Priority;
+import com.bumptech.glide.load.data.DataFetcher;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class ImageVideoModelLoaderTest {
     private ImageVideoLoaderHarness harness;
 

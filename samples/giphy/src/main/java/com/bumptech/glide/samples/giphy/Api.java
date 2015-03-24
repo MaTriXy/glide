@@ -1,10 +1,10 @@
 package com.bumptech.glide.samples.giphy;
 
+import com.google.gson.Gson;
+
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
-
-import com.google.gson.Gson;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -19,7 +19,7 @@ import java.util.HashSet;
  * A java wrapper for Giphy's http api based on https://github.com/Giphy/GiphyAPI.
  */
 public final class Api {
-    private static Api api = null;
+    private static volatile Api api = null;
     private static final String BETA_KEY = "dc6zaTOxFJmzC";
     private static final String BASE_URL = "http://api.giphy.com";
     private static final String SEARCH_PATH = "/v1/gifs/search";

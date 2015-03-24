@@ -8,8 +8,10 @@ import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
+import android.view.Gravity;
 
 import com.bumptech.glide.gifdecoder.GifDecoder;
 import com.bumptech.glide.gifdecoder.GifHeader;
@@ -20,14 +22,13 @@ import com.bumptech.glide.load.resource.drawable.GlideDrawable;
 /**
  * An animated {@link android.graphics.drawable.Drawable} that plays the frames of an animated GIF.
  */
-public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameCallback {
-    private final Paint paint = new Paint();
-    private final GifFrameManager frameManager;
+public class GifDrawable extends GlideDrawable implements GifFrameLoader.FrameCallback {
+    private final Paint paint;
+    private final Rect destRect = new Rect();
     private final GifState state;
     private final GifDecoder decoder;
+    private final GifFrameLoader frameLoader;
 
-    /** The current frame to draw, or null if no frame has been loaded yet. */
-    private Bitmap currentFrame;
     /** True if the drawable is currently animating. */
     private boolean isRunning;
     /** True if the drawable should animate while visible. */
@@ -45,6 +46,8 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
     /** The number of times to loop through the gif animation. */
     private int maxLoopCount = LOOP_FOREVER;
 
+    private boolean applyGravity;
+
     /**
      * Constructor for GifDrawable.
      *
@@ -60,31 +63,35 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
      *                         {@link com.bumptech.glide.request.target.Target} this drawable is being loaded into).
      * @param targetFrameHeight The desired height of the frames displayed by this drawable (the height of the view or
      *                          {@link com.bumptech.glide.request.target.Target} this drawable is being loaded into).
-     * @param id An id that uniquely identifies this particular gif.
      * @param gifHeader The header data for this gif.
      * @param data The full bytes of the gif.
      * @param firstFrame The decoded and transformed first frame of this gif.
      */
     public GifDrawable(Context context, GifDecoder.BitmapProvider bitmapProvider, BitmapPool bitmapPool,
-            Transformation<Bitmap> frameTransformation, int targetFrameWidth, int targetFrameHeight, String id,
+            Transformation<Bitmap> frameTransformation, int targetFrameWidth, int targetFrameHeight,
             GifHeader gifHeader, byte[] data, Bitmap firstFrame) {
-        this(new GifState(id, gifHeader, data, context, frameTransformation, targetFrameWidth, targetFrameHeight,
+        this(new GifState(gifHeader, data, context, frameTransformation, targetFrameWidth, targetFrameHeight,
                 bitmapProvider, bitmapPool, firstFrame));
     }
 
     GifDrawable(GifState state) {
+        if (state == null) {
+            throw new NullPointerException("GifState must not be null");
+        }
+
         this.state = state;
         this.decoder = new GifDecoder(state.bitmapProvider);
-        decoder.setData(state.id, state.gifHeader, state.data);
-        frameManager = new GifFrameManager(state.context, decoder, state.frameTransformation, state.targetWidth,
-                state.targetHeight, state.firstFrame.getWidth(), state.firstFrame.getHeight());
+        this.paint = new Paint();
+        decoder.setData(state.gifHeader, state.data);
+        frameLoader = new GifFrameLoader(state.context, this, decoder, state.targetWidth, state.targetHeight);
     }
 
     // Visible for testing.
-    GifDrawable(GifDecoder decoder, GifFrameManager frameManager, Bitmap firstFrame, BitmapPool bitmapPool) {
+    GifDrawable(GifDecoder decoder, GifFrameLoader frameLoader, Bitmap firstFrame, BitmapPool bitmapPool, Paint paint) {
         this.decoder = decoder;
-        this.frameManager = frameManager;
+        this.frameLoader = frameLoader;
         this.state = new GifState(null);
+        this.paint = paint;
         state.bitmapPool = bitmapPool;
         state.firstFrame = firstFrame;
     }
@@ -94,8 +101,15 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
     }
 
     public void setFrameTransformation(Transformation<Bitmap> frameTransformation, Bitmap firstFrame) {
+        if (firstFrame == null) {
+            throw new NullPointerException("The first frame of the GIF must not be null");
+        }
+        if (frameTransformation == null) {
+            throw new NullPointerException("The frame transformation must not be null");
+        }
         state.frameTransformation = frameTransformation;
         state.firstFrame = firstFrame;
+        frameLoader.setFrameTransformation(frameTransformation);
     }
 
     public GifDecoder getDecoder() {
@@ -131,6 +145,22 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
     public void stop() {
         isStarted = false;
         stopRunning();
+
+        // On APIs > honeycomb we know our drawable is not being displayed anymore when it's callback is cleared and so
+        // we can use the absence of a callback as an indication that it's ok to clear our temporary data. Prior to
+        // honeycomb we can't tell if our callback is null and instead eagerly reset to avoid holding on to resources we
+        // no longer need.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.HONEYCOMB) {
+            reset();
+        }
+    }
+
+    /**
+     * Clears temporary data and resets the drawable back to the first frame.
+     */
+    private void reset() {
+        frameLoader.clear();
+        invalidateSelf();
     }
 
     private void startRunning() {
@@ -139,13 +169,14 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
             invalidateSelf();
         }  else if (!isRunning) {
             isRunning = true;
-            frameManager.getNextFrame(this);
+            frameLoader.start();
             invalidateSelf();
         }
     }
 
     private void stopRunning() {
         isRunning = false;
+        frameLoader.stop();
     }
 
     @Override
@@ -180,9 +211,25 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
     }
 
     @Override
+    protected void onBoundsChange(Rect bounds) {
+        super.onBoundsChange(bounds);
+        applyGravity = true;
+    }
+
+    @Override
     public void draw(Canvas canvas) {
+        if (isRecycled) {
+            return;
+        }
+
+        if (applyGravity) {
+            Gravity.apply(GifState.GRAVITY, getIntrinsicWidth(), getIntrinsicHeight(), getBounds(), destRect);
+            applyGravity = false;
+        }
+
+        Bitmap currentFrame = frameLoader.getCurrentFrame();
         Bitmap toDraw = currentFrame != null ? currentFrame : state.firstFrame;
-        canvas.drawBitmap(toDraw, 0, 0, paint);
+        canvas.drawBitmap(toDraw, null, destRect, paint);
     }
 
     @Override
@@ -197,24 +244,20 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
 
     @Override
     public int getOpacity() {
-        return decoder.isTransparent() ? PixelFormat.TRANSPARENT : PixelFormat.OPAQUE;
+        // We can't tell, so default to transparent to be safe.
+        return PixelFormat.TRANSPARENT;
     }
 
     @TargetApi(Build.VERSION_CODES.HONEYCOMB)
     @Override
-    public void onFrameRead(Bitmap frame, int frameIndex) {
-        if (Build.VERSION_CODES.HONEYCOMB <= Build.VERSION.SDK_INT && getCallback() == null) {
+    public void onFrameReady(int frameIndex) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB && getCallback() == null) {
             stop();
-            return;
-        }
-        if (!isRunning) {
+            reset();
             return;
         }
 
-        if (frame != null) {
-            currentFrame = frame;
-            invalidateSelf();
-        }
+        invalidateSelf();
 
         if (frameIndex == decoder.getFrameCount() - 1) {
             loopCount++;
@@ -222,8 +265,6 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
 
         if (maxLoopCount != LOOP_FOREVER && loopCount >= maxLoopCount) {
             stop();
-        } else {
-            frameManager.getNextFrame(this);
         }
     }
 
@@ -238,7 +279,8 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
     public void recycle() {
         isRecycled = true;
         state.bitmapPool.put(state.firstFrame);
-        frameManager.clear();
+        frameLoader.clear();
+        frameLoader.stop();
     }
 
     // For testing.
@@ -266,7 +308,7 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
     }
 
     static class GifState extends ConstantState {
-        String id;
+        private static final int GRAVITY = Gravity.FILL;
         GifHeader gifHeader;
         byte[] data;
         Context context;
@@ -277,10 +319,12 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
         BitmapPool bitmapPool;
         Bitmap firstFrame;
 
-        public GifState(String id, GifHeader header, byte[] data, Context context,
+        public GifState(GifHeader header, byte[] data, Context context,
                 Transformation<Bitmap> frameTransformation, int targetWidth, int targetHeight,
                 GifDecoder.BitmapProvider provider, BitmapPool bitmapPool, Bitmap firstFrame) {
-            this.id = id;
+            if (firstFrame == null) {
+                throw new NullPointerException("The first frame of the GIF must not be null");
+            }
             gifHeader = header;
             this.data = data;
             this.bitmapPool = bitmapPool;
@@ -294,7 +338,6 @@ public class GifDrawable extends GlideDrawable implements GifFrameManager.FrameC
 
         public GifState(GifState original) {
             if (original != null) {
-                id = original.id;
                 gifHeader = original.gifHeader;
                 data = original.data;
                 context = original.context;

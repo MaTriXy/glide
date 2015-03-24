@@ -1,5 +1,15 @@
 package com.bumptech.glide;
 
+import static com.bumptech.glide.tests.BackgroundUtil.testInBackground;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.net.Uri;
@@ -14,6 +24,7 @@ import com.bumptech.glide.manager.ConnectivityMonitor;
 import com.bumptech.glide.manager.ConnectivityMonitor.ConnectivityListener;
 import com.bumptech.glide.manager.ConnectivityMonitorFactory;
 import com.bumptech.glide.manager.Lifecycle;
+import com.bumptech.glide.manager.RequestManagerTreeNode;
 import com.bumptech.glide.manager.RequestTracker;
 import com.bumptech.glide.tests.BackgroundUtil;
 import com.bumptech.glide.tests.GlideShadowLooper;
@@ -31,18 +42,8 @@ import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 
-import static com.bumptech.glide.tests.BackgroundUtil.testInBackground;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @RunWith(RobolectricTestRunner.class)
-@Config(shadows = GlideShadowLooper.class)
+@Config(manifest = Config.NONE, emulateSdk = 18, shadows = GlideShadowLooper.class)
 public class RequestManagerTest {
     private RequestManager manager;
     private ConnectivityMonitor connectivityMonitor;
@@ -50,6 +51,7 @@ public class RequestManagerTest {
     private ConnectivityListener connectivityListener;
     private RequestManager.DefaultOptions options;
     private Lifecycle lifecycle = mock(Lifecycle.class);
+    private RequestManagerTreeNode treeNode = mock(RequestManagerTreeNode.class);
 
     @Before
     public void setUp() {
@@ -64,7 +66,8 @@ public class RequestManagerTest {
                     }
                 });
         requestTracker = mock(RequestTracker.class);
-        manager = new RequestManager(Robolectric.application, lifecycle, requestTracker, factory);
+        manager =
+            new RequestManager(Robolectric.application, lifecycle, treeNode, requestTracker, factory);
         options = mock(RequestManager.DefaultOptions.class);
         manager.setDefaultOptions(options);
     }

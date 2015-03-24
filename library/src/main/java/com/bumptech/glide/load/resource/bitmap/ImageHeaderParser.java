@@ -1,5 +1,11 @@
 package com.bumptech.glide.load.resource.bitmap;
 
+import static com.bumptech.glide.load.resource.bitmap.ImageHeaderParser.ImageType.GIF;
+import static com.bumptech.glide.load.resource.bitmap.ImageHeaderParser.ImageType.JPEG;
+import static com.bumptech.glide.load.resource.bitmap.ImageHeaderParser.ImageType.PNG;
+import static com.bumptech.glide.load.resource.bitmap.ImageHeaderParser.ImageType.PNG_A;
+import static com.bumptech.glide.load.resource.bitmap.ImageHeaderParser.ImageType.UNKNOWN;
+
 import android.util.Log;
 
 import java.io.IOException;
@@ -7,12 +13,6 @@ import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-
-import static com.bumptech.glide.load.resource.bitmap.ImageHeaderParser.ImageType.GIF;
-import static com.bumptech.glide.load.resource.bitmap.ImageHeaderParser.ImageType.JPEG;
-import static com.bumptech.glide.load.resource.bitmap.ImageHeaderParser.ImageType.PNG;
-import static com.bumptech.glide.load.resource.bitmap.ImageHeaderParser.ImageType.PNG_A;
-import static com.bumptech.glide.load.resource.bitmap.ImageHeaderParser.ImageType.UNKNOWN;
 
 /**
  * A class for parsing the exif orientation and other data from an image header.
@@ -84,14 +84,13 @@ public class ImageHeaderParser {
     }
 
     public ImageType getType() throws IOException {
-        int firstByte = streamReader.getUInt8();
+        int firstTwoBytes = streamReader.getUInt16();
 
         // JPEG.
-        if (firstByte == EXIF_MAGIC_NUMBER >> 8) {
+        if (firstTwoBytes == EXIF_MAGIC_NUMBER) {
             return JPEG;
         }
 
-        final int firstTwoBytes = firstByte << 8 & 0xFF00 | streamReader.getUInt8() & 0xFF;
         final int firstFourBytes = firstTwoBytes << 16 & 0xFFFF0000 | streamReader.getUInt16() & 0xFFFF;
         // PNG.
         if (firstFourBytes == PNG_HEADER) {
@@ -125,7 +124,7 @@ public class ImageHeaderParser {
         } else {
             byte[] exifData = getExifSegment();
             boolean hasJpegExifPreamble = exifData != null
-                    && exifData.length >= JPEG_EXIF_SEGMENT_PREAMBLE_BYTES.length;
+                    && exifData.length > JPEG_EXIF_SEGMENT_PREAMBLE_BYTES.length;
 
             if (hasJpegExifPreamble) {
                 for (int i = 0; i < JPEG_EXIF_SEGMENT_PREAMBLE_BYTES.length; i++) {

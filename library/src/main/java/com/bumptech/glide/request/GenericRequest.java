@@ -3,6 +3,7 @@ package com.bumptech.glide.request;
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.util.Log;
+
 import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.Key;
 import com.bumptech.glide.load.Transformation;
@@ -45,10 +46,12 @@ public final class GenericRequest<A, T, Z, R> implements Request, SizeReadyCallb
         WAITING_FOR_SIZE,
         /** Finished loading media successfully. */
         COMPLETE,
-        /** Failed to load media. */
+        /** Failed to load media, may be restarted. */
         FAILED,
         /** Cancelled by the user, may not be restarted. */
         CANCELLED,
+        /** Cleared by the user with a placeholder set, may not be restarted. */
+        CLEARED,
         /** Temporarily paused by the system, may be restarted. */
         PAUSED,
     }
@@ -67,7 +70,7 @@ public final class GenericRequest<A, T, Z, R> implements Request, SizeReadyCallb
     private boolean isMemoryCacheable;
     private Priority priority;
     private Target<R> target;
-    private RequestListener<A, R> requestListener;
+    private RequestListener<? super A, R> requestListener;
     private float sizeMultiplier;
     private Engine engine;
     private GlideAnimationFactory<R> animationFactory;
@@ -96,7 +99,7 @@ public final class GenericRequest<A, T, Z, R> implements Request, SizeReadyCallb
             int placeholderResourceId,
             Drawable errorDrawable,
             int errorResourceId,
-            RequestListener<A, R> requestListener,
+            RequestListener<? super A, R> requestListener,
             RequestCoordinator requestCoordinator,
             Engine engine,
             Transformation<Z> transformation,
@@ -168,7 +171,7 @@ public final class GenericRequest<A, T, Z, R> implements Request, SizeReadyCallb
             int placeholderResourceId,
             Drawable errorDrawable,
             int errorResourceId,
-            RequestListener<A, R> requestListener,
+            RequestListener<? super A, R> requestListener,
             RequestCoordinator requestCoordinator,
             Engine engine,
             Transformation<Z> transformation,
@@ -181,7 +184,7 @@ public final class GenericRequest<A, T, Z, R> implements Request, SizeReadyCallb
         this.loadProvider = loadProvider;
         this.model = model;
         this.signature = signature;
-        this.context = context;
+        this.context = context.getApplicationContext();
         this.priority = priority;
         this.target = target;
         this.sizeMultiplier = sizeMultiplier;
@@ -252,7 +255,7 @@ public final class GenericRequest<A, T, Z, R> implements Request, SizeReadyCallb
         }
 
         status = Status.WAITING_FOR_SIZE;
-        if (overrideWidth > 0 && overrideHeight > 0) {
+        if (Util.isValidDimensions(overrideWidth, overrideHeight)) {
             onSizeReady(overrideWidth, overrideHeight);
         } else {
             target.getSize(this);
@@ -297,6 +300,9 @@ public final class GenericRequest<A, T, Z, R> implements Request, SizeReadyCallb
     @Override
     public void clear() {
         Util.assertMainThread();
+        if (status == Status.CLEARED) {
+            return;
+        }
         cancel();
         // Resource must be released before canNotifyStatusChanged is called.
         if (resource != null) {
@@ -305,6 +311,8 @@ public final class GenericRequest<A, T, Z, R> implements Request, SizeReadyCallb
         if (canNotifyStatusChanged()) {
             target.onLoadCleared(getPlaceholderDrawable());
         }
+        // Must be after cancel().
+        status = Status.CLEARED;
     }
 
     @Override
@@ -352,7 +360,7 @@ public final class GenericRequest<A, T, Z, R> implements Request, SizeReadyCallb
      */
     @Override
     public boolean isCancelled() {
-        return status == Status.CANCELLED;
+        return status == Status.CANCELLED || status == Status.CLEARED;
     }
 
     /**
@@ -437,6 +445,12 @@ public final class GenericRequest<A, T, Z, R> implements Request, SizeReadyCallb
         return requestCoordinator == null || !requestCoordinator.isAnyResourceSet();
     }
 
+    private void notifyLoadSuccess() {
+      if (requestCoordinator != null) {
+        requestCoordinator.onRequestSuccess(this);
+      }
+    }
+
     /**
      * A callback method that should never be invoked directly.
      */
@@ -487,6 +501,7 @@ public final class GenericRequest<A, T, Z, R> implements Request, SizeReadyCallb
 
         status = Status.COMPLETE;
         this.resource = resource;
+        notifyLoadSuccess();
 
         if (Log.isLoggable(TAG, Log.VERBOSE)) {
             logV("Resource ready in " + LogTime.getElapsedMillis(startTime) + " size: "

@@ -2,7 +2,9 @@ package com.bumptech.glide.manager;
 
 import com.bumptech.glide.request.Request;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.WeakHashMap;
 
@@ -17,6 +19,12 @@ public class RequestTracker {
     // can always make repeated requests into targets other than views, or use an activity manager in a fragment pager
     // where holding strong references would steadily leak bitmaps and/or views.
     private final Set<Request> requests = Collections.newSetFromMap(new WeakHashMap<Request, Boolean>());
+    // A set of requests that have not completed and are queued to be run again. We use this list to maintain hard
+    // references to these requests to ensure that they are not garbage collected before they start running or
+    // while they are paused. See #346.
+    @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
+    private final List<Request> pendingRequests = new ArrayList<Request>();
+
     private boolean isPaused;
 
     /**
@@ -26,10 +34,12 @@ public class RequestTracker {
         requests.add(request);
         if (!isPaused) {
             request.begin();
+        } else {
+            pendingRequests.add(request);
         }
     }
 
-    // Exposed for testing.
+    // Visible for testing.
     void addRequest(Request request) {
         requests.add(request);
     }
@@ -39,6 +49,7 @@ public class RequestTracker {
      */
     public void removeRequest(Request request) {
         requests.remove(request);
+        pendingRequests.remove(request);
     }
 
     /**
@@ -53,9 +64,10 @@ public class RequestTracker {
      */
     public void pauseRequests() {
         isPaused = true;
-        for (Request request : requests) {
+        for (Request request : getSnapshot()) {
             if (request.isRunning()) {
                 request.pause();
+                pendingRequests.add(request);
             }
         }
     }
@@ -65,34 +77,51 @@ public class RequestTracker {
      */
     public void resumeRequests() {
         isPaused = false;
-        for (Request request : requests) {
+        for (Request request : getSnapshot()) {
             if (!request.isComplete() && !request.isCancelled() && !request.isRunning()) {
                 request.begin();
             }
         }
+        pendingRequests.clear();
     }
 
     /**
      * Cancels all requests and clears their resources.
      */
     public void clearRequests() {
-        for (Request request : requests) {
+        for (Request request : getSnapshot()) {
             request.clear();
         }
+        pendingRequests.clear();
     }
 
     /**
      * Restarts failed requests and cancels and restarts in progress requests.
      */
     public void restartRequests() {
-        for (Request request : requests) {
+        for (Request request : getSnapshot()) {
             if (!request.isComplete() && !request.isCancelled()) {
                 // Ensure the request will be restarted in onResume.
                 request.pause();
                 if (!isPaused) {
                     request.begin();
+                } else {
+                    pendingRequests.add(request);
                 }
             }
         }
+    }
+
+    // Avoids a ConcurrentModificationException when requests are started by another request completing. See #303.
+    private List<Request> getSnapshot() {
+        // toArray creates a new ArrayList internally and this way we can guarantee entries will not be
+        // null. See #322.
+        List<Request> result = new ArrayList<Request>(requests.size());
+        // We could also just call new ArrayList<Request>(requests) but that actually creates two new ArrayLists because
+        // that constructor in ArrayList calls toArray().
+        for (Request request : requests) {
+            result.add(request);
+        }
+        return result;
     }
 }

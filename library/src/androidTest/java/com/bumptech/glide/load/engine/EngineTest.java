@@ -1,6 +1,21 @@
 package com.bumptech.glide.load.engine;
 
-import android.os.Looper;
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.isNull;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.Encoder;
 import com.bumptech.glide.load.Key;
@@ -15,15 +30,14 @@ import com.bumptech.glide.provider.DataLoadProvider;
 import com.bumptech.glide.request.ResourceCallback;
 import com.bumptech.glide.tests.BackgroundUtil;
 import com.bumptech.glide.tests.GlideShadowLooper;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
-import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
-import org.robolectric.shadows.ShadowLooper;
 
 import java.io.File;
 import java.lang.ref.WeakReference;
@@ -31,28 +45,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.hasEntry;
-import static org.hamcrest.Matchers.hasKey;
-import static org.hamcrest.Matchers.not;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyString;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isNull;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-
 @RunWith(RobolectricTestRunner.class)
-@Config(shadows = { GlideShadowLooper.class })
+@Config(manifest = Config.NONE, emulateSdk = 18, shadows = { GlideShadowLooper.class })
 public class EngineTest {
     private static final String ID = "asdf";
     private EngineTestHarness harness;
@@ -93,7 +87,7 @@ public class EngineTest {
     public void testNewRunnerIsAddedToRunnersMap() {
         harness.doLoad();
 
-        assertThat(harness.jobs, hasKey((Key) harness.cacheKey));
+        assertThat(harness.jobs).containsKey(harness.cacheKey);
     }
 
     @Test
@@ -148,7 +142,7 @@ public class EngineTest {
 
         harness.doLoad();
 
-        assertThat(harness.activeResources, not(hasKey((Key) harness.cacheKey)));
+        assertThat(harness.activeResources).doesNotContainKey(harness.cacheKey);
     }
 
     @Test
@@ -189,12 +183,33 @@ public class EngineTest {
     }
 
     @Test
-    public void testCacheIsChecked() {
+    public void testActiveResourcesIsNotCheckedIfNotMemoryCacheable() {
+        harness.activeResources.put(harness.cacheKey, new WeakReference<EngineResource<?>>(harness.resource));
+
+        harness.isMemoryCacheable = false;
+        harness.doLoad();
+
+        verify(harness.resource, never()).acquire();
+        verify(harness.job).start(any(EngineRunnable.class));
+    }
+
+    @Test
+    public void testCacheIsCheckedIfMemoryCacheable() {
         when(harness.cache.remove(eq(harness.cacheKey))).thenReturn(harness.resource);
 
         harness.doLoad();
 
         verify(harness.cb).onResourceReady(eq(harness.resource));
+    }
+
+    @Test
+    public void testCacheIsNotCheckedIfNotMemoryCacheable() {
+        when(harness.cache.remove(eq(harness.cacheKey))).thenReturn(harness.resource);
+
+        harness.isMemoryCacheable = false;
+        harness.doLoad();
+
+        verify(harness.job).start(any(EngineRunnable.class));
     }
 
     @Test
@@ -205,7 +220,6 @@ public class EngineTest {
 
         verify(harness.cb).onResourceReady(eq(harness.resource));
     }
-
 
     @Test
     public void testHandlesNonEngineResourcesFromCacheIfPresent() {
@@ -270,7 +284,7 @@ public class EngineTest {
 
         harness.engine.onEngineJobComplete(harness.cacheKey, harness.resource);
 
-        assertThat(harness.jobs, not(hasKey((Key) harness.cacheKey)));
+        assertThat(harness.jobs).doesNotContainKey(harness.cacheKey);
     }
 
     @Test
@@ -291,6 +305,7 @@ public class EngineTest {
 
     @Test
     public void testResourceIsAddedToActiveResourcesOnEngineComplete() {
+        when(harness.resource.isCacheable()).thenReturn(true);
         harness.engine.onEngineJobComplete(harness.cacheKey, harness.resource);
 
         WeakReference<EngineResource<?>> resourceRef = harness.activeResources.get(harness.cacheKey);
@@ -300,7 +315,14 @@ public class EngineTest {
     @Test
     public void testDoesNotPutNullResourceInActiveResourcesOnEngineComplete() {
         harness.engine.onEngineJobComplete(harness.cacheKey, null);
-        assertThat(harness.activeResources, not(hasKey((Key) harness.cacheKey)));
+        assertThat(harness.activeResources).doesNotContainKey(harness.cacheKey);
+    }
+
+    @Test
+    public void testDoesNotPutResourceThatIsNotCacheableInActiveResourcesOnEngineComplete() {
+        when(harness.resource.isCacheable()).thenReturn(false);
+        harness.engine.onEngineJobComplete(harness.cacheKey, harness.resource);
+        assertThat(harness.activeResources).doesNotContainKey(harness.cacheKey);
     }
 
     @Test
@@ -309,9 +331,8 @@ public class EngineTest {
 
         harness.engine.onEngineJobCancelled(harness.job, harness.cacheKey);
 
-        assertThat(harness.jobs, not(hasKey((Key) harness.cacheKey)));
+        assertThat(harness.jobs).doesNotContainKey(harness.cacheKey);
     }
-
 
     @Test
     public void testJobIsNotRemovedFromJobsIfOldJobIsCancelled() {
@@ -352,13 +373,9 @@ public class EngineTest {
 
     @Test
     public void testResourceIsRecycledIfNotCacheableWhenReleased() {
-        ShadowLooper shadowLooper = Robolectric.shadowOf(Looper.getMainLooper());
         when(harness.resource.isCacheable()).thenReturn(false);
-        shadowLooper.pause();
         harness.engine.onResourceReleased(harness.cacheKey, harness.resource);
-        verify(harness.resource, never()).recycle();
-        shadowLooper.runOneTask();
-        verify(harness.resource).recycle();
+        verify(harness.resourceRecycler).recycle(eq(harness.resource));
     }
 
     @Test
@@ -367,7 +384,7 @@ public class EngineTest {
 
         harness.engine.onResourceReleased(harness.cacheKey, harness.resource);
 
-        assertThat(harness.activeResources, not(hasKey((Key) harness.cacheKey)));
+        assertThat(harness.activeResources).doesNotContainKey(harness.cacheKey);
     }
 
     @Test
@@ -377,20 +394,15 @@ public class EngineTest {
 
     @Test
     public void testResourceIsRecycledWhenRemovedFromCache() {
-        ShadowLooper shadowLooper = Robolectric.shadowOf(Looper.getMainLooper());
-        shadowLooper.pause();
         harness.engine.onResourceRemoved(harness.resource);
-        // We expect the release to be posted
-        verify(harness.resource, never()).recycle();
-        shadowLooper.runOneTask();
-        verify(harness.resource).recycle();
+        verify(harness.resourceRecycler).recycle(eq(harness.resource));
     }
 
     @Test
     public void testJobIsPutInJobWithCacheKeyWithRelevantIds() {
         harness.doLoad();
 
-        assertThat(harness.jobs, hasEntry(equalTo((Key) harness.cacheKey), equalTo(harness.job)));
+        assertThat(harness.jobs).containsEntry(harness.cacheKey, harness.job);
     }
 
     @Test
@@ -402,12 +414,23 @@ public class EngineTest {
                 eq(harness.transcoder), eq(harness.sourceEncoder));
     }
 
-
     @Test
     public void testFactoryIsGivenNecessaryArguments() {
         harness.doLoad();
 
         verify(harness.engineJobFactory).build(eq(harness.cacheKey), eq(harness.isMemoryCacheable));
+    }
+
+    @Test
+    public void testReleaseReleasesEngineResource() {
+        EngineResource<Object> engineResource = mock(EngineResource.class);
+        harness.engine.release(engineResource);
+        verify(engineResource).release();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testThrowsIfAskedToReleaseNonEngineResource() {
+        harness.engine.release(mock(Resource.class));
     }
 
     @Test(expected = RuntimeException.class)
@@ -446,9 +469,10 @@ public class EngineTest {
         MemoryCache cache = mock(MemoryCache.class);
         EngineJob job;
         Engine engine;
-        boolean isMemoryCacheable;
+        boolean isMemoryCacheable = true;
         Engine.EngineJobFactory engineJobFactory = mock(Engine.EngineJobFactory.class);
         DataLoadProvider<Object, Object> loadProvider = mock(DataLoadProvider.class);
+        ResourceRecycler resourceRecycler = mock(ResourceRecycler.class);
 
         public EngineTestHarness() {
             when(loadProvider.getCacheDecoder()).thenReturn(cacheDecoder);
@@ -463,13 +487,13 @@ public class EngineTest {
 
             job = mock(EngineJob.class);
 
-            engine = new Engine(cache, mock(DiskCache.class), mock(ExecutorService.class),
-                    mock(ExecutorService.class), jobs, keyFactory, activeResources, engineJobFactory);
+            engine = new Engine(cache, mock(DiskCache.Factory.class), mock(ExecutorService.class),
+                    mock(ExecutorService.class), jobs, keyFactory, activeResources, engineJobFactory, resourceRecycler);
 
-            when(engineJobFactory.build(eq(cacheKey), eq(isMemoryCacheable))).thenReturn(job);
         }
 
         public Engine.LoadStatus doLoad() {
+            when(engineJobFactory.build(eq(cacheKey), eq(isMemoryCacheable))).thenReturn(job);
             return engine.load(signature, width, height, fetcher, loadProvider, transformation, transcoder, priority,
                     isMemoryCacheable, diskCacheStrategy, cb);
         }

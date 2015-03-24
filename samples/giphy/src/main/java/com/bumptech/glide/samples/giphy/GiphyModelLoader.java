@@ -55,6 +55,5 @@ public class GiphyModelLoader extends BaseGlideUrlLoader<Api.GifResult> {
 
     private static int getDifference(Api.GifImage gifImage, int width, int height) {
         return Math.abs(width - gifImage.width) + Math.abs(height - gifImage.height);
-
     }
 }

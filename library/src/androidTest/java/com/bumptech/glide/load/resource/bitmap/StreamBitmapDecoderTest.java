@@ -1,27 +1,30 @@
 package com.bumptech.glide.load.resource.bitmap;
 
-import android.graphics.Bitmap;
-import com.bumptech.glide.load.engine.Resource;
-import com.bumptech.glide.load.DecodeFormat;
-import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
-import com.bumptech.glide.tests.Util;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-
-import static org.hamcrest.Matchers.containsString;
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import android.graphics.Bitmap;
+
+import com.bumptech.glide.load.DecodeFormat;
+import com.bumptech.glide.load.engine.Resource;
+import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
+import com.bumptech.glide.tests.Util;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class StreamBitmapDecoderTest {
     private DecoderHarness harness;
 
@@ -50,15 +53,15 @@ public class StreamBitmapDecoderTest {
         when(harness.downsampler.getId()).thenReturn(downsamplerId);
 
         String actualId = harness.decoder.getId();
-        assertThat(actualId, containsString(downsamplerId));
-        assertThat(actualId, containsString(harness.decodeFormat.toString()));
-        assertThat(actualId, containsString(Util.getExpectedClassId(StreamBitmapDecoder.class)));
+        assertThat(actualId).contains(downsamplerId);
+        assertThat(actualId).contains(harness.decodeFormat.toString());
+        assertThat(actualId).contains(Util.getExpectedClassId(StreamBitmapDecoder.class));
     }
 
     private static class DecoderHarness {
         Downsampler downsampler = mock(Downsampler.class);
         BitmapPool bitmapPool = mock(BitmapPool.class);
-        DecodeFormat decodeFormat = DecodeFormat.ALWAYS_ARGB_8888;
+        DecodeFormat decodeFormat = DecodeFormat.PREFER_ARGB_8888;
         InputStream source = new ByteArrayInputStream(new byte[0]);
         int width = 100;
         int height = 100;

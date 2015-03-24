@@ -1,9 +1,12 @@
 package com.bumptech.glide.load.resource.bytes;
 
-import org.junit.Test;
-
 import static org.junit.Assert.assertEquals;
 
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+@RunWith(JUnit4.class)
 public class BytesResourceTest {
 
     @Test
@@ -20,6 +23,11 @@ public class BytesResourceTest {
         BytesResource resource = new BytesResource(bytes);
 
         assertEquals(bytes.length, resource.getSize());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testThrowsIfGivenNullBytes() {
+        new BytesResource(null);
     }
 
 }

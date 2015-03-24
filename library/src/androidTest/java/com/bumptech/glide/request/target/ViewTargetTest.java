@@ -1,5 +1,18 @@
 package com.bumptech.glide.request.target;
 
+import static com.google.common.truth.Truth.assertThat;
+import static android.view.ViewGroup.LayoutParams;
+import static android.view.ViewTreeObserver.OnPreDrawListener;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.view.View;
@@ -25,22 +38,9 @@ import org.robolectric.shadows.ShadowViewTreeObserver;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-import static android.view.ViewGroup.LayoutParams;
-import static android.view.ViewTreeObserver.OnPreDrawListener;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.hasSize;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-
 @RunWith(RobolectricTestRunner.class)
-@Config(shadows = { ViewTargetTest.SizedShadowView.class, ViewTargetTest.PreDrawShadowViewTreeObserver.class })
+@Config(manifest = Config.NONE, emulateSdk = 18, shadows = { ViewTargetTest.SizedShadowView.class,
+        ViewTargetTest.PreDrawShadowViewTreeObserver.class })
 public class ViewTargetTest {
     private View view;
     private ViewTarget target;
@@ -112,21 +112,133 @@ public class ViewTargetTest {
         verify(cb).onSizeReady(eq(dimens), eq(dimens));
     }
 
+    private void setDisplayDimens(Integer width, Integer height) {
+        WindowManager windowManager = (WindowManager) Robolectric.application.getSystemService(Context.WINDOW_SERVICE);
+        ShadowDisplay shadowDisplay = Robolectric.shadowOf(windowManager.getDefaultDisplay());
+        if (width != null) {
+            shadowDisplay.setWidth(width);
+        }
+
+        if (height != null) {
+            shadowDisplay.setHeight(height);
+        }
+    }
+
+    private void setDisplayWidth(int width) {
+        setDisplayDimens(width, null);
+    }
+
+    private void setDisplayHeight(int height) {
+        setDisplayDimens(null, height);
+    }
+
     @Test
-    public void testSizeCallbackIsCalledSynchronouslyWithScreenSizeIfLayoutParamsWrapContent() {
+    public void testBothParamsWrapContent() {
         LayoutParams layoutParams = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
         view.setLayoutParams(layoutParams);
 
-        int width = 1234;
-        int height = 674;
-        WindowManager windowManager = (WindowManager) view.getContext()
-                .getSystemService(Context.WINDOW_SERVICE);
-        ShadowDisplay shadowDisplay = Robolectric.shadowOf(windowManager.getDefaultDisplay());
-        shadowDisplay.setWidth(width);
-        shadowDisplay.setHeight(height);
+        int width = 123;
+        int height = 456;
+        setDisplayDimens(width, height);
+        SizeReadyCallback cb = mock(SizeReadyCallback.class);
+        target.getSize(cb);
+
+        verify(cb).onSizeReady(eq(width), eq(height));
+    }
+
+    @Test
+    public void testWrapContentWidthWithValidHeight() {
+        int displayWidth = 500;
+        setDisplayWidth(displayWidth);
+
+        int height = 100;
+        LayoutParams params = new LayoutParams(LayoutParams.WRAP_CONTENT, height);
+        view.setLayoutParams(params);
 
         SizeReadyCallback cb = mock(SizeReadyCallback.class);
         target.getSize(cb);
+
+        verify(cb).onSizeReady(eq(displayWidth), eq(height));
+    }
+
+    @Test
+    public void testWrapContentHeightWithValidWidth() {
+        int displayHeight = 700;
+        setDisplayHeight(displayHeight);
+        int width = 100;
+        LayoutParams params = new LayoutParams(width, LayoutParams.WRAP_CONTENT);
+        view.setLayoutParams(params);
+
+        SizeReadyCallback cb = mock(SizeReadyCallback.class);
+        target.getSize(cb);
+
+        verify(cb).onSizeReady(eq(width), eq(displayHeight));
+    }
+
+    @Test
+    public void testWrapContentWidthWithMatchParentHeight() {
+        int displayWidth = 1234;
+        setDisplayWidth(displayWidth);
+
+        LayoutParams params = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT);
+        view.setLayoutParams(params);
+
+        SizeReadyCallback cb = mock(SizeReadyCallback.class);
+        target.getSize(cb);
+
+        verify(cb, never()).onSizeReady(anyInt(), anyInt());
+
+        int height = 32;
+        SizedShadowView shadowView = Robolectric.shadowOf_(view);
+        shadowView.setHeight(height);
+
+        PreDrawShadowViewTreeObserver shadowObserver = Robolectric.shadowOf_(view.getViewTreeObserver());
+        shadowObserver.fireOnPreDrawListeners();
+
+        verify(cb).onSizeReady(eq(displayWidth), eq(height));
+    }
+
+    @Test
+    public void testWrapContentHeightWithMatchParentWidth() {
+        int displayHeight = 5812;
+        setDisplayHeight(displayHeight);
+
+        LayoutParams params = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT);
+        view.setLayoutParams(params);
+
+        SizeReadyCallback cb = mock(SizeReadyCallback.class);
+        target.getSize(cb);
+
+        verify(cb, never()).onSizeReady(anyInt(), anyInt());
+
+        int width = 32;
+        SizedShadowView shadowView = Robolectric.shadowOf_(view);
+        shadowView.setWidth(width);
+
+        PreDrawShadowViewTreeObserver shadowObserver = Robolectric.shadowOf_(view.getViewTreeObserver());
+        shadowObserver.fireOnPreDrawListeners();
+
+        verify(cb).onSizeReady(eq(width), eq(displayHeight));
+    }
+
+    @Test
+    public void testMatchParentWidthAndHeight() {
+        LayoutParams params = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT);
+        view.setLayoutParams(params);
+
+        SizeReadyCallback cb = mock(SizeReadyCallback.class);
+        target.getSize(cb);
+
+        verify(cb, never()).onSizeReady(anyInt(), anyInt());
+
+        int width = 32;
+        int height = 45;
+        SizedShadowView shadowView = Robolectric.shadowOf_(view);
+        shadowView.setWidth(width);
+        shadowView.setHeight(height);
+
+        PreDrawShadowViewTreeObserver shadowObserver = Robolectric.shadowOf_(view.getViewTreeObserver());
+        shadowObserver.fireOnPreDrawListeners();
 
         verify(cb).onSizeReady(eq(width), eq(height));
     }
@@ -192,7 +304,7 @@ public class ViewTargetTest {
         target.getSize(cb2);
 
         PreDrawShadowViewTreeObserver shadowObserver = Robolectric.shadowOf_(view.getViewTreeObserver());
-        assertThat(shadowObserver.getPreDrawListeners(), hasSize(1));
+        assertThat(shadowObserver.getPreDrawListeners()).hasSize(1);
     }
 
     @Test
@@ -205,7 +317,7 @@ public class ViewTargetTest {
         PreDrawShadowViewTreeObserver shadowObserver = Robolectric.shadowOf_(view.getViewTreeObserver());
         shadowObserver.fireOnPreDrawListeners();
 
-        assertThat(shadowObserver.getPreDrawListeners(), hasSize(0));
+        assertThat(shadowObserver.getPreDrawListeners()).hasSize(0);
 
         SizeReadyCallback cb2 = mock(SizeReadyCallback.class);
         view.setLayoutParams(new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));
@@ -226,7 +338,7 @@ public class ViewTargetTest {
         shadowObserver.fireOnPreDrawListeners();
 
         verify(cb, never()).onSizeReady(anyInt(), anyInt());
-        assertThat(shadowObserver.getPreDrawListeners(), hasSize(1));
+        assertThat(shadowObserver.getPreDrawListeners()).hasSize(1);
     }
 
     @Test
@@ -299,7 +411,7 @@ public class ViewTargetTest {
 
     @Test(expected = NullPointerException.class)
     public void testThrowsIfGivenNullView() {
-        ViewTarget viewTarget = new TestViewTarget(null);
+        new TestViewTarget(null);
     }
 
     @Implements(ViewTreeObserver.class)

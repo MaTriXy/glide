@@ -1,7 +1,12 @@
 package com.bumptech.glide.tests;
 
+import static org.junit.Assert.assertEquals;
+
+import android.os.Build;
+
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
+import org.robolectric.Robolectric;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -9,8 +14,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-
-import static org.junit.Assert.assertEquals;
 
 public class Util {
 
@@ -69,5 +72,9 @@ public class Util {
                 return (T) invocation.getArguments()[argumentIndex];
             }
         };
+    }
+
+    public static void setSdkVersionInt(int version) {
+        Robolectric.Reflection.setFinalStaticField(Build.VERSION.class, "SDK_INT", version);
     }
 }

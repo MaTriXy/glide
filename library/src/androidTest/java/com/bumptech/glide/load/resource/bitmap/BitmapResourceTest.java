@@ -1,15 +1,5 @@
 package com.bumptech.glide.load.resource.bitmap;
 
-import android.graphics.Bitmap;
-import android.os.Build;
-import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.Robolectric;
-import org.robolectric.RobolectricTestRunner;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -18,8 +8,22 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.graphics.Bitmap;
+import android.os.Build;
+
+import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
+import com.bumptech.glide.tests.Util;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+
 //TODO: add a test for bitmap size using getAllocationByteSize when robolectric supports kitkat.
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class BitmapResourceTest {
     private int currentBuildVersion;
     private BitmapResourceHarness harness;
@@ -32,7 +36,7 @@ public class BitmapResourceTest {
 
     @After
     public void tearDown() {
-        Robolectric.Reflection.setFinalStaticField(Build.VERSION.class, "SDK_INT", currentBuildVersion);
+        Util.setSdkVersionInt(currentBuildVersion);
     }
 
     @Test
@@ -42,7 +46,7 @@ public class BitmapResourceTest {
 
     @Test
     public void testSizeIsBasedOnDimensPreKitKat() {
-        Robolectric.Reflection.setFinalStaticField(Build.VERSION.class, "SDK_INT", 18);
+        Util.setSdkVersionInt(18);
         assertEquals(harness.bitmap.getWidth() * harness.bitmap.getHeight() * 4, harness.resource.getSize());
     }
 
@@ -69,6 +73,21 @@ public class BitmapResourceTest {
         harness.resource.recycle();
 
         assertTrue(harness.bitmap.isRecycled());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testThrowsIfBitmapIsNull() {
+        new BitmapResource(null, mock(BitmapPool.class));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testThrowsIfBitmapPoolIsNull() {
+        new BitmapResource(Bitmap.createBitmap(100, 100, Bitmap.Config.RGB_565), null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testThrowsIfBitmapAndBitmapPoolAreNull() {
+        new BitmapResource(null, null);
     }
 
     private static class BitmapResourceHarness {

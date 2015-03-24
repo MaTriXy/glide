@@ -1,6 +1,7 @@
 package com.bumptech.glide.load.data;
 
 import android.text.TextUtils;
+
 import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.model.GlideUrl;
 
@@ -9,6 +10,7 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.Map;
 
 /**
  * A DataFetcher that retrieves an {@link java.io.InputStream} for a Url.
@@ -36,10 +38,11 @@ public class HttpUrlFetcher implements DataFetcher<InputStream> {
 
     @Override
     public InputStream loadData(Priority priority) throws Exception {
-        return loadDataWithRedirects(glideUrl.toURL(), 0 /*redirects*/, null /*lastUrl*/);
+        return loadDataWithRedirects(glideUrl.toURL(), 0 /*redirects*/, null /*lastUrl*/, glideUrl.getHeaders());
     }
 
-    private InputStream loadDataWithRedirects(URL url, int redirects, URL lastUrl) throws IOException {
+    private InputStream loadDataWithRedirects(URL url, int redirects, URL lastUrl, Map<String, String> headers)
+            throws IOException {
         if (redirects >= MAXIMUM_REDIRECTS) {
             throw new IOException("Too many (> " + MAXIMUM_REDIRECTS + ") redirects!");
         } else {
@@ -54,6 +57,9 @@ public class HttpUrlFetcher implements DataFetcher<InputStream> {
             }
         }
         urlConnection = connectionFactory.build(url);
+        for (Map.Entry<String, String> headerEntry : headers.entrySet()) {
+          urlConnection.addRequestProperty(headerEntry.getKey(), headerEntry.getValue());
+        }
         urlConnection.setConnectTimeout(2500);
         urlConnection.setReadTimeout(2500);
         urlConnection.setUseCaches(false);
@@ -74,7 +80,7 @@ public class HttpUrlFetcher implements DataFetcher<InputStream> {
                 throw new IOException("Received empty or null redirect url");
             }
             URL redirectUrl = new URL(url, redirectUrlString);
-            return loadDataWithRedirects(redirectUrl, redirects + 1, url);
+            return loadDataWithRedirects(redirectUrl, redirects + 1, url, headers);
         } else {
             if (statusCode == -1) {
                 throw new IOException("Unable to retrieve response code from HttpUrlConnection.");
@@ -99,7 +105,7 @@ public class HttpUrlFetcher implements DataFetcher<InputStream> {
 
     @Override
     public String getId() {
-        return glideUrl.toString();
+        return glideUrl.getCacheKey();
     }
 
     @Override

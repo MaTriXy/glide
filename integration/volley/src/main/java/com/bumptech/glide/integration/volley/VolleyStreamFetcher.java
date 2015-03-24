@@ -1,5 +1,6 @@
 package com.bumptech.glide.integration.volley;
 
+import com.android.volley.AuthFailureError;
 import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
@@ -11,13 +12,26 @@ import com.bumptech.glide.load.model.GlideUrl;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.lang.reflect.Method;
+import java.util.Collections;
+import java.util.Map;
 
 /**
  * A DataFetcher backed by volley for fetching images via http.
  */
 public class VolleyStreamFetcher implements DataFetcher<InputStream> {
+    public static final VolleyRequestFactory DEFAULT_REQUEST_FACTORY = new VolleyRequestFactory() {
+
+        @Override
+        public Request<byte[]> create(
+                    String url, VolleyRequestFuture<InputStream> future,
+                    Request.Priority priority, Map<String, String> headers) {
+            return new GlideRequest(url, future, priority, headers);
+        }
+
+    };
+
     private final RequestQueue requestQueue;
+    private final VolleyRequestFactory requestFactory;
     private final GlideUrl url;
     private VolleyRequestFuture<InputStream> requestFuture;
 
@@ -28,8 +42,14 @@ public class VolleyStreamFetcher implements DataFetcher<InputStream> {
 
     public VolleyStreamFetcher(RequestQueue requestQueue, GlideUrl url,
             VolleyRequestFuture<InputStream> requestFuture) {
+        this(requestQueue, url, requestFuture, DEFAULT_REQUEST_FACTORY);
+    }
+
+    public VolleyStreamFetcher(RequestQueue requestQueue, GlideUrl url,
+            VolleyRequestFuture<InputStream> requestFuture, VolleyRequestFactory requestFactory) {
         this.requestQueue = requestQueue;
         this.url = url;
+        this.requestFactory = requestFactory;
         this.requestFuture = requestFuture;
         if (requestFuture == null) {
             this.requestFuture = VolleyRequestFuture.newFuture();
@@ -39,8 +59,9 @@ public class VolleyStreamFetcher implements DataFetcher<InputStream> {
     @Override
     public InputStream loadData(Priority priority) throws Exception {
         // Make sure the string url safely encodes non ascii characters.
-        String stringUrl = url.toURL().toString();
-        GlideRequest request = new GlideRequest(stringUrl, requestFuture, glideToVolleyPriority(priority));
+        String stringUrl = url.toStringUrl();
+        Request<byte[]> request = requestFactory.create(
+                stringUrl, requestFuture, glideToVolleyPriority(priority), url.getHeaders());
 
         requestFuture.setRequest(requestQueue.add(request));
 
@@ -54,7 +75,7 @@ public class VolleyStreamFetcher implements DataFetcher<InputStream> {
 
     @Override
     public String getId() {
-        return url.toString();
+        return url.getCacheKey();
     }
 
     @Override
@@ -81,12 +102,24 @@ public class VolleyStreamFetcher implements DataFetcher<InputStream> {
 
     private static class GlideRequest extends Request<byte[]> {
         private final VolleyRequestFuture<InputStream> future;
-        private Priority priority;
+        private final Priority priority;
+        private final Map<String, String> headers;
 
         public GlideRequest(String url, VolleyRequestFuture<InputStream> future, Priority priority) {
-            super(Method.GET, url, future);
-            this.future = future;
-            this.priority = priority;
+          this(url, future, priority, Collections.<String, String>emptyMap());
+        }
+
+        public GlideRequest(String url, VolleyRequestFuture<InputStream> future, Priority priority,
+                  Map<String, String> headers) {
+              super(Method.GET, url, future);
+              this.future = future;
+              this.priority = priority;
+          this.headers = headers;
+        }
+
+        @Override
+        public Map<String, String> getHeaders() throws AuthFailureError {
+          return headers;
         }
 
         @Override

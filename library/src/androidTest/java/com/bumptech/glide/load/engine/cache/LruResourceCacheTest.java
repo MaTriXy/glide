@@ -1,13 +1,5 @@
 package com.bumptech.glide.load.engine.cache;
 
-import android.content.ComponentCallbacks2;
-import com.bumptech.glide.load.Key;
-import com.bumptech.glide.load.engine.Resource;
-import org.junit.Test;
-
-import java.io.UnsupportedEncodingException;
-import java.security.MessageDigest;
-
 import static com.bumptech.glide.load.engine.cache.MemoryCache.ResourceRemovedListener;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -17,6 +9,19 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.content.ComponentCallbacks2;
+
+import com.bumptech.glide.load.Key;
+import com.bumptech.glide.load.engine.Resource;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+import java.io.UnsupportedEncodingException;
+import java.security.MessageDigest;
+
+@RunWith(JUnit4.class)
 public class LruResourceCacheTest {
     private static class TrimClearMemoryCacheHarness {
         LruResourceCache resourceCache = new LruResourceCache(100);

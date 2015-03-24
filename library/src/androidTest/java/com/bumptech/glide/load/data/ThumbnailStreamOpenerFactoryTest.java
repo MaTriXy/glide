@@ -1,16 +1,19 @@
 package com.bumptech.glide.load.data;
 
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+
 import android.net.Uri;
 import android.provider.MediaStore;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
-
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
+import org.robolectric.annotation.Config;
 
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class ThumbnailStreamOpenerFactoryTest {
     private MediaStoreThumbFetcher.ThumbnailStreamOpenerFactory factory;
     private Uri uri;

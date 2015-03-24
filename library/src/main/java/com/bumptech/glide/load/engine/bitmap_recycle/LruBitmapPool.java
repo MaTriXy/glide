@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.os.Build;
 import android.util.Log;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -19,8 +20,10 @@ import java.util.Set;
  */
 public class LruBitmapPool implements BitmapPool {
     private static final String TAG = "LruBitmapPool";
+    private static final Bitmap.Config DEFAULT_CONFIG = Bitmap.Config.ARGB_8888;
 
     private final LruPoolStrategy strategy;
+    private final Set<Bitmap.Config> allowedConfigs;
     private final int initialMaxSize;
     private final BitmapTracker tracker;
 
@@ -32,10 +35,11 @@ public class LruBitmapPool implements BitmapPool {
     private int evictions;
 
     // Exposed for testing only.
-    LruBitmapPool(int maxSize, LruPoolStrategy strategy) {
+    LruBitmapPool(int maxSize, LruPoolStrategy strategy, Set<Bitmap.Config> allowedConfigs) {
         this.initialMaxSize = maxSize;
         this.maxSize = maxSize;
         this.strategy = strategy;
+        this.allowedConfigs = allowedConfigs;
         this.tracker = new NullBitmapTracker();
     }
 
@@ -45,7 +49,18 @@ public class LruBitmapPool implements BitmapPool {
      * @param maxSize The initial maximum size of the pool in bytes.
      */
     public LruBitmapPool(int maxSize) {
-        this(maxSize, getDefaultStrategy());
+        this(maxSize, getDefaultStrategy(), getDefaultAllowedConfigs());
+    }
+
+    /**
+     * Constructor for LruBitmapPool.
+     *
+     * @param maxSize The initial maximum size of the pool in bytes.
+     * @param allowedConfigs A white listed set of {@link android.graphics.Bitmap.Config} that are allowed to be put
+     *                       into the pool. Configs not in the allowed set will be rejected.
+     */
+    public LruBitmapPool(int maxSize, Set<Bitmap.Config> allowedConfigs) {
+        this(maxSize, getDefaultStrategy(), allowedConfigs);
     }
 
     @Override
@@ -61,7 +76,16 @@ public class LruBitmapPool implements BitmapPool {
 
     @Override
     public synchronized boolean put(Bitmap bitmap) {
-        if (!bitmap.isMutable() || strategy.getSize(bitmap) > maxSize) {
+        if (bitmap == null) {
+            throw new NullPointerException("Bitmap must not be null");
+        }
+        if (!bitmap.isMutable() || strategy.getSize(bitmap) > maxSize || !allowedConfigs.contains(bitmap.getConfig())) {
+            if (Log.isLoggable(TAG, Log.VERBOSE)) {
+                Log.v(TAG, "Reject bitmap from pool"
+                        + ", bitmap: " + strategy.logBitmap(bitmap)
+                        + ", is mutable: " + bitmap.isMutable()
+                        + ", is allowed config: " + allowedConfigs.contains(bitmap.getConfig()));
+            }
             return false;
         }
 
@@ -72,8 +96,8 @@ public class LruBitmapPool implements BitmapPool {
         puts++;
         currentSize += size;
 
-        if (Log.isLoggable(TAG, Log.DEBUG)) {
-            Log.d(TAG, "Put bitmap in pool=" + strategy.logBitmap(bitmap));
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.v(TAG, "Put bitmap in pool=" + strategy.logBitmap(bitmap));
         }
         dump();
 
@@ -101,7 +125,9 @@ public class LruBitmapPool implements BitmapPool {
     @TargetApi(Build.VERSION_CODES.HONEYCOMB_MR1)
     @Override
     public synchronized Bitmap getDirty(int width, int height, Bitmap.Config config) {
-        final Bitmap result = strategy.get(width, height, config);
+        // Config will be null for non public config types, which can lead to transformations naively passing in
+        // null as the requested config here. See issue #194.
+        final Bitmap result = strategy.get(width, height, config != null ? config : DEFAULT_CONFIG);
         if (result == null) {
             if (Log.isLoggable(TAG, Log.DEBUG)) {
                 Log.d(TAG, "Missing bitmap=" + strategy.logBitmap(width, height, config));
@@ -115,8 +141,8 @@ public class LruBitmapPool implements BitmapPool {
                 result.setHasAlpha(true);
             }
         }
-        if (Log.isLoggable(TAG, Log.DEBUG)) {
-            Log.d(TAG, "Get bitmap=" + strategy.logBitmap(width, height, config));
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.v(TAG, "Get bitmap=" + strategy.logBitmap(width, height, config));
         }
         dump();
 
@@ -125,12 +151,18 @@ public class LruBitmapPool implements BitmapPool {
 
     @Override
     public void clearMemory() {
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.d(TAG, "clearMemory");
+        }
         trimToSize(0);
     }
 
     @SuppressLint("InlinedApi")
     @Override
     public void trimMemory(int level) {
+        if (Log.isLoggable(TAG, Log.VERBOSE)) {
+            Log.d(TAG, "trimMemory, level=" + level);
+        }
         if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_MODERATE) {
             clearMemory();
         } else if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
@@ -141,6 +173,16 @@ public class LruBitmapPool implements BitmapPool {
     private synchronized void trimToSize(int size) {
         while (currentSize > size) {
             final Bitmap removed = strategy.removeLast();
+            // TODO: This shouldn't ever happen, see #331.
+            if (removed == null) {
+                if (Log.isLoggable(TAG, Log.WARN)) {
+                    Log.w(TAG, "Size mismatch, resetting");
+                    dumpUnchecked();
+                }
+                currentSize = 0;
+                return;
+            }
+
             tracker.remove(removed);
             currentSize -= strategy.getSize(removed);
             removed.recycle();
@@ -154,19 +196,37 @@ public class LruBitmapPool implements BitmapPool {
 
     private void dump() {
         if (Log.isLoggable(TAG, Log.VERBOSE)) {
-            Log.v(TAG, "Hits=" + hits + " misses=" + misses + " puts=" + puts + " evictions=" + evictions
-                    + " currentSize=" + currentSize + " maxSize=" + maxSize + "\nStrategy=" + strategy);
+            dumpUnchecked();
         }
+    }
+
+    private void dumpUnchecked() {
+        Log.v(TAG, "Hits="  + hits
+                    + ", misses=" + misses
+                    + ", puts=" + puts
+                    + ", evictions=" + evictions
+                    + ", currentSize=" + currentSize
+                    + ", maxSize=" + maxSize
+                    + "\nStrategy=" + strategy);
     }
 
     private static LruPoolStrategy getDefaultStrategy() {
         final LruPoolStrategy strategy;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-            strategy = new SizeStrategy();
+            strategy = new SizeConfigStrategy();
         } else {
             strategy = new AttributeStrategy();
         }
         return strategy;
+    }
+
+    private static Set<Bitmap.Config> getDefaultAllowedConfigs() {
+        Set<Bitmap.Config> configs = new HashSet<Bitmap.Config>();
+        configs.addAll(Arrays.asList(Bitmap.Config.values()));
+        if (Build.VERSION.SDK_INT >= 19) {
+            configs.add(null);
+        }
+        return Collections.unmodifiableSet(configs);
     }
 
     private interface BitmapTracker {

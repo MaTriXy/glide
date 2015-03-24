@@ -1,15 +1,19 @@
 package com.bumptech.glide.load.resource.transcode;
 
-import com.bumptech.glide.load.engine.Resource;
-import com.bumptech.glide.load.resource.gif.GifDrawable;
-import com.bumptech.glide.tests.Util;
-import org.junit.Before;
-import org.junit.Test;
-
 import static org.junit.Assert.assertArrayEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.bumptech.glide.load.engine.Resource;
+import com.bumptech.glide.load.resource.gif.GifDrawable;
+import com.bumptech.glide.tests.Util;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+@RunWith(JUnit4.class)
 public class GifDrawableBytesTranscoderTest {
     private GifDrawableBytesTranscoder transcoder;
     private GifDrawable gifDrawable;

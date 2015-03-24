@@ -1,28 +1,5 @@
 package com.bumptech.glide.load.engine;
 
-import com.bumptech.glide.Priority;
-import com.bumptech.glide.load.Encoder;
-import com.bumptech.glide.load.Key;
-import com.bumptech.glide.load.ResourceDecoder;
-import com.bumptech.glide.load.ResourceEncoder;
-import com.bumptech.glide.load.Transformation;
-import com.bumptech.glide.load.data.DataFetcher;
-import com.bumptech.glide.load.engine.cache.DiskCache;
-import com.bumptech.glide.load.resource.transcode.ResourceTranscoder;
-import com.bumptech.glide.provider.DataLoadProvider;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-import org.robolectric.RobolectricTestRunner;
-
-import java.io.File;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.util.Arrays;
-import java.util.List;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
@@ -36,13 +13,40 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.bumptech.glide.Priority;
+import com.bumptech.glide.load.Encoder;
+import com.bumptech.glide.load.Key;
+import com.bumptech.glide.load.ResourceDecoder;
+import com.bumptech.glide.load.ResourceEncoder;
+import com.bumptech.glide.load.Transformation;
+import com.bumptech.glide.load.data.DataFetcher;
+import com.bumptech.glide.load.engine.cache.DiskCache;
+import com.bumptech.glide.load.resource.transcode.ResourceTranscoder;
+import com.bumptech.glide.provider.DataLoadProvider;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.List;
+
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class DecodeJobTest {
 
     private Harness harness;
 
     @Before
-    public void setUp() {
+    public void setUp() throws FileNotFoundException {
         harness = new Harness();
     }
 
@@ -585,6 +589,7 @@ public class DecodeJobTest {
         Transformation<Object> transformation = mock(Transformation.class);
         ResourceTranscoder<Object, Object> transcoder = mock(ResourceTranscoder.class);
         DiskCache diskCache = mock(DiskCache.class);
+        DecodeJob.DiskCacheProvider diskCacheProvider = mock(DecodeJob.DiskCacheProvider.class);
         Priority priority = Priority.IMMEDIATE;
 
         ResourceDecoder<File, Object> cacheDecoder = mock(ResourceDecoder.class);
@@ -592,15 +597,17 @@ public class DecodeJobTest {
         ResourceEncoder<Object> resultEncoder = mock(ResourceEncoder.class);
         ResourceDecoder<Object, Object> sourceDecoder = mock(ResourceDecoder.class);
         Encoder<Object> sourceEncoder = mock(Encoder.class);
+        DecodeJob.FileOpener fileOpener = mock(DecodeJob.FileOpener.class);
 
         DiskCacheStrategy diskCacheStrategy;
 
-        public Harness() {
+        public Harness() throws FileNotFoundException {
             this(DiskCacheStrategy.RESULT);
         }
 
-        public Harness(DiskCacheStrategy diskCacheStrategy) {
+        public Harness(DiskCacheStrategy diskCacheStrategy) throws FileNotFoundException {
             this.diskCacheStrategy = diskCacheStrategy;
+            when(fileOpener.open(any(File.class))).thenReturn(mock(OutputStream.class));
             when(key.getOriginalKey()).thenReturn(originalKey);
             when(transcoder.transcode(eq(resource))).thenReturn(resource);
             when(transformation.transform(eq(resource), eq(width), eq(height))).thenReturn(resource);
@@ -608,11 +615,12 @@ public class DecodeJobTest {
             when(loadProvider.getEncoder()).thenReturn(resultEncoder);
             when(loadProvider.getSourceDecoder()).thenReturn(sourceDecoder);
             when(loadProvider.getSourceEncoder()).thenReturn(sourceEncoder);
+            when(diskCacheProvider.getDiskCache()).thenReturn(diskCache);
         }
 
         public DecodeJob<Object, Object, Object> getJob() {
             return new DecodeJob<Object, Object, Object>(key, width, height, dataFetcher, loadProvider, transformation,
-                    transcoder, diskCache, diskCacheStrategy, priority);
+                    transcoder, diskCacheProvider, diskCacheStrategy, priority, fileOpener);
         }
     }
 

@@ -1,20 +1,5 @@
 package com.bumptech.glide.load.resource.bitmap;
 
-import android.graphics.Bitmap;
-import android.os.ParcelFileDescriptor;
-import com.bumptech.glide.load.engine.Resource;
-import com.bumptech.glide.load.ResourceDecoder;
-import com.bumptech.glide.load.model.ImageVideoWrapper;
-import com.bumptech.glide.tests.Util;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
@@ -23,7 +8,26 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.graphics.Bitmap;
+import android.os.ParcelFileDescriptor;
+
+import com.bumptech.glide.load.ResourceDecoder;
+import com.bumptech.glide.load.engine.Resource;
+import com.bumptech.glide.load.model.ImageVideoWrapper;
+import com.bumptech.glide.tests.Util;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class ImageVideoBitmapDecoderTest {
     private ImageVideoDecoderHarness harness;
 

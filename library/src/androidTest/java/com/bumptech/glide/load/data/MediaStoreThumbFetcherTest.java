@@ -1,20 +1,7 @@
 package com.bumptech.glide.load.data;
 
-import android.net.Uri;
-import android.provider.MediaStore;
-import com.bumptech.glide.Priority;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.Robolectric;
-import org.robolectric.RobolectricTestRunner;
-
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-
-import static org.hamcrest.Matchers.containsString;
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
@@ -22,7 +9,23 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.net.Uri;
+import android.provider.MediaStore;
+
+import com.bumptech.glide.Priority;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class MediaStoreThumbFetcherTest {
     private Harness harness;
 
@@ -88,7 +91,7 @@ public class MediaStoreThumbFetcherTest {
     @Test
     public void testContainsAllRelevantPartsInId() {
         String id = harness.get().getId();
-        assertThat(id, containsString(harness.uri.toString()));
+        assertThat(id).contains(harness.uri.toString());
     }
 
     @SuppressWarnings("unchecked")

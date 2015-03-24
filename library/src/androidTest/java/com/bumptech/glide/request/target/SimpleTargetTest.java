@@ -1,10 +1,14 @@
 package com.bumptech.glide.request.target;
 
-import com.bumptech.glide.request.animation.GlideAnimation;
-import org.junit.Test;
-
 import static org.mockito.Mockito.mock;
 
+import com.bumptech.glide.request.animation.GlideAnimation;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+@RunWith(JUnit4.class)
 public class SimpleTargetTest {
 
     @Test(expected = IllegalArgumentException.class)
@@ -32,9 +36,14 @@ public class SimpleTargetTest {
         getTarget();
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testThrowsOnGetSizeIfConstructedWithoutDimensions() {
-        getTarget().getSize(mock(SizeReadyCallback.class));
+    @Test
+    public void testConstructorDoesNotThrowWithSizeOriginal() {
+        getTarget(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL);
+    }
+
+    @Test
+    public void testGetSizeDoesNotThrowWithSizeOriginal() {
+        getTarget(Target.SIZE_ORIGINAL, Target.SIZE_ORIGINAL).getSize(mock(SizeReadyCallback.class));
     }
 
     private SimpleTarget<Object> getTarget() {

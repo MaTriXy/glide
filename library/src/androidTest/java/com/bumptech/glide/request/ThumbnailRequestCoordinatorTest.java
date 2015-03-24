@@ -1,11 +1,8 @@
 package com.bumptech.glide.request;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.mockito.InOrder;
-
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -13,6 +10,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+import org.mockito.InOrder;
+
+@RunWith(JUnit4.class)
 public class ThumbnailRequestCoordinatorTest {
     private Request full;
     private Request thumb;
@@ -263,4 +267,47 @@ public class ThumbnailRequestCoordinatorTest {
         assertTrue(coordinator.isResourceSet());
     }
 
+    @Test
+    public void testClearsThumbRequestOnFullRequestComplete_withNullParent() {
+        coordinator.onRequestSuccess(full);
+        verify(thumb).clear();
+    }
+
+    @Test
+    public void testNotifiesParentOnFullRequestComplete_withNonNullParent() {
+        coordinator = new ThumbnailRequestCoordinator(parent);
+        coordinator.setRequests(full, thumb);
+        coordinator.onRequestSuccess(full);
+        verify(parent).onRequestSuccess(eq(coordinator));
+    }
+
+    @Test
+    public void testClearsThumbRequestOnFullRequestComplete_withNonNullParent() {
+        coordinator = new ThumbnailRequestCoordinator(parent);
+        coordinator.setRequests(full, thumb);
+        coordinator.onRequestSuccess(full);
+        verify(thumb).clear();
+    }
+
+    @Test
+    public void testDoesNotClearThumbOnThumbRequestComplete() {
+        coordinator.onRequestSuccess(thumb);
+        verify(thumb, never()).clear();
+    }
+
+    @Test
+    public void testDoesNotClearThumbOnFullComplete_whenThumbIsComplete() {
+        when(thumb.isComplete()).thenReturn(true);
+        coordinator.onRequestSuccess(full);
+        verify(thumb, never()).clear();
+    }
+
+    @Test
+    public void testDoesNotNotifyParentOnThumbRequestComplete() {
+        coordinator = new ThumbnailRequestCoordinator(parent);
+        coordinator.setRequests(full, thumb);
+        coordinator.onRequestSuccess(thumb);
+
+        verify(parent, never()).onRequestSuccess(any(Request.class));
+    }
 }

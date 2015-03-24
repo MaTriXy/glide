@@ -1,23 +1,28 @@
 package com.bumptech.glide.load.engine.cache;
 
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import com.google.common.collect.Range;
+
 import android.app.ActivityManager;
 import android.content.Context;
 import android.os.Build;
+
+import com.bumptech.glide.tests.Util;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
-
-import static org.hamcrest.Matchers.lessThan;
-import static org.hamcrest.Matchers.lessThanOrEqualTo;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import org.robolectric.annotation.Config;
 
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class MemorySizeCalculatorTest {
     private MemorySizeHarness harness;
     private int initialSdkVersion;
@@ -30,11 +35,7 @@ public class MemorySizeCalculatorTest {
 
     @After
     public void tearDown() {
-        setSdkVersionInt(initialSdkVersion);
-    }
-
-    private void setSdkVersionInt(int version) {
-        Robolectric.Reflection.setFinalStaticField(Build.VERSION.class, "SDK_INT", version);
+        Util.setSdkVersionInt(initialSdkVersion);
     }
 
     @Test
@@ -55,15 +56,16 @@ public class MemorySizeCalculatorTest {
 
         int memoryCacheSize = harness.getCalculator().getMemoryCacheSize();
 
-        assertThat(memoryCacheSize, lessThanOrEqualTo(Math.round(memoryClassBytes * harness.sizeMultiplier)));
+        assertThat((float) memoryCacheSize).isIn(Range.atMost(memoryClassBytes * harness.sizeMultiplier));
     }
 
     @Test
-    public void testDefaultBitmapPoolSizeIsThreeTimesScreenSize() {
+    public void testDefaultBitmapPoolSize() {
         Robolectric.shadowOf(harness.activityManager).setMemoryClass(getLargeEnoughMemoryClass());
 
         int bitmapPoolSize = harness.getCalculator().getBitmapPoolSize();
 
+//        assertThat(bitmapPoolSize).isIn(Range.open());
         assertEquals(harness.getScreenSize() * harness.bitmapPoolScreens, bitmapPoolSize);
     }
 
@@ -76,7 +78,7 @@ public class MemorySizeCalculatorTest {
 
         int bitmapPoolSize = harness.getCalculator().getBitmapPoolSize();
 
-        assertThat(bitmapPoolSize, lessThanOrEqualTo(Math.round(memoryClassBytes * harness.sizeMultiplier)));
+        assertThat((float) bitmapPoolSize).isIn(Range.atMost(memoryClassBytes * harness.sizeMultiplier));
     }
 
     @Test
@@ -88,13 +90,8 @@ public class MemorySizeCalculatorTest {
         int memoryCacheSize = harness.getCalculator().getMemoryCacheSize();
         int bitmapPoolSize = harness.getCalculator().getBitmapPoolSize();
 
-        String failHelpMessage =
-                  "memoryCacheSize: " + memoryCacheSize
-                + " bitmapPoolSize: " + bitmapPoolSize
-                + " memoryClass: "    + memoryCacheSize
-                + " sizeMultiplier: " + harness.sizeMultiplier;
-        assertThat(failHelpMessage, memoryCacheSize + bitmapPoolSize,
-                lessThanOrEqualTo(Math.round(memoryClassBytes * harness.sizeMultiplier)));
+        assertThat((float) memoryCacheSize + bitmapPoolSize).isIn(
+                Range.atMost(memoryClassBytes * harness.sizeMultiplier));
     }
 
     @Test
@@ -103,19 +100,21 @@ public class MemorySizeCalculatorTest {
         final int normalMemoryCacheSize = harness.getCalculator().getMemoryCacheSize();
         final int normalBitmapPoolSize = harness.getCalculator().getBitmapPoolSize();
 
-        setSdkVersionInt(10);
+        Util.setSdkVersionInt(10);
 
         final int smallMemoryCacheSize = harness.getCalculator().getMemoryCacheSize();
         final int smallBitmapPoolSize = harness.getCalculator().getBitmapPoolSize();
 
-        assertThat(smallMemoryCacheSize, lessThan(normalMemoryCacheSize));
-        assertThat(smallBitmapPoolSize, lessThan(normalBitmapPoolSize));
+        assertThat(smallMemoryCacheSize).isLessThan(normalMemoryCacheSize);
+        assertThat(smallBitmapPoolSize).isLessThan(normalBitmapPoolSize);
     }
 
     private int getLargeEnoughMemoryClass() {
+        float totalScreenBytes = harness.getScreenSize() * (harness.bitmapPoolScreens + harness.memoryCacheScreens);
         // Memory class is in mb, not bytes!
-        return Math.round(harness.getScreenSize() * (harness.bitmapPoolScreens + harness.memoryCacheScreens)
-                * (1f / harness.sizeMultiplier) / (1024 * 1024));
+        float totalScreenMb = totalScreenBytes / (1024 * 1024);
+        float memoryClassMb = totalScreenMb / harness.sizeMultiplier;
+        return (int) Math.ceil(memoryClassMb);
     }
 
     private static class MemorySizeHarness {
@@ -131,7 +130,7 @@ public class MemorySizeCalculatorTest {
         public MemorySizeCalculator getCalculator() {
             when(screenDimensions.getWidthPixels()).thenReturn(pixelSize);
             when(screenDimensions.getHeightPixels()).thenReturn(pixelSize);
-            return new MemorySizeCalculator(activityManager, screenDimensions);
+            return new MemorySizeCalculator(Robolectric.application, activityManager, screenDimensions);
         }
 
         public int getScreenSize() {

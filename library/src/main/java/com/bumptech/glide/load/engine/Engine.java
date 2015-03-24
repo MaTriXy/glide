@@ -1,10 +1,9 @@
 package com.bumptech.glide.load.engine;
 
-import android.os.Handler;
 import android.os.Looper;
-import android.os.Message;
 import android.os.MessageQueue;
 import android.util.Log;
+
 import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.Key;
 import com.bumptech.glide.load.Transformation;
@@ -26,16 +25,20 @@ import java.util.concurrent.ExecutorService;
 /**
  * Responsible for starting loads and managing active and cached resources.
  */
-public class Engine implements EngineJobListener, MemoryCache.ResourceRemovedListener, EngineResource.ResourceListener {
+public class Engine implements EngineJobListener,
+        MemoryCache.ResourceRemovedListener,
+        EngineResource.ResourceListener {
     private static final String TAG = "Engine";
     private final Map<Key, EngineJob> jobs;
     private final EngineKeyFactory keyFactory;
     private final MemoryCache cache;
-    private final DiskCache diskCache;
     private final EngineJobFactory engineJobFactory;
     private final Map<Key, WeakReference<EngineResource<?>>> activeResources;
-    private final ReferenceQueue<EngineResource<?>> resourceReferenceQueue;
-    private final Handler mainHandler;
+    private final ResourceRecycler resourceRecycler;
+    private final LazyDiskCacheProvider diskCacheProvider;
+
+    // Lazily instantiate to avoid exceptions if Glide is initialized on a background thread. See #295.
+    private ReferenceQueue<EngineResource<?>> resourceReferenceQueue;
 
     /**
      * Allows a request to indicate it no longer is interested in a given load.
@@ -54,17 +57,18 @@ public class Engine implements EngineJobListener, MemoryCache.ResourceRemovedLis
         }
     }
 
-    public Engine(MemoryCache memoryCache, DiskCache diskCache, ExecutorService diskCacheService,
+    public Engine(MemoryCache memoryCache, DiskCache.Factory diskCacheFactory, ExecutorService diskCacheService,
             ExecutorService sourceService) {
-        this(memoryCache, diskCache, diskCacheService, sourceService, null, null, null, null);
+        this(memoryCache, diskCacheFactory, diskCacheService, sourceService, null, null, null, null, null);
     }
 
     // Visible for testing.
-    Engine(MemoryCache cache, DiskCache diskCache, ExecutorService diskCacheService, ExecutorService sourceService,
-            Map<Key, EngineJob> jobs, EngineKeyFactory keyFactory,
-            Map<Key, WeakReference<EngineResource<?>>> activeResources, EngineJobFactory engineJobFactory) {
+    Engine(MemoryCache cache, DiskCache.Factory diskCacheFactory, ExecutorService diskCacheService,
+            ExecutorService sourceService, Map<Key, EngineJob> jobs, EngineKeyFactory keyFactory,
+            Map<Key, WeakReference<EngineResource<?>>> activeResources, EngineJobFactory engineJobFactory,
+            ResourceRecycler resourceRecycler) {
         this.cache = cache;
-        this.diskCache = diskCache;
+        this.diskCacheProvider = new LazyDiskCacheProvider(diskCacheFactory);
 
         if (activeResources == null) {
             activeResources = new HashMap<Key, WeakReference<EngineResource<?>>>();
@@ -86,12 +90,12 @@ public class Engine implements EngineJobListener, MemoryCache.ResourceRemovedLis
         }
         this.engineJobFactory = engineJobFactory;
 
-        resourceReferenceQueue = new ReferenceQueue<EngineResource<?>>();
-        MessageQueue queue = Looper.myQueue();
-        queue.addIdleHandler(new RefQueueIdleHandler(activeResources, resourceReferenceQueue));
-        cache.setResourceRemovedListener(this);
+        if (resourceRecycler == null) {
+            resourceRecycler = new ResourceRecycler();
+        }
+        this.resourceRecycler = resourceRecycler;
 
-        mainHandler = new Handler(Looper.getMainLooper(), new ResourceRecyclerCallback());
+        cache.setResourceRemovedListener(this);
     }
 
     /**
@@ -118,8 +122,8 @@ public class Engine implements EngineJobListener, MemoryCache.ResourceRemovedLis
      *
      * @param signature A non-null unique key to be mixed into the cache key that identifies the version of the data to
      *                  be loaded.
-     * @param width The target width of the retrieved resource.
-     * @param height The target height of the retrieved resource.
+     * @param width The target width in pixels of the desired resource.
+     * @param height The target height in pixels of the desired resource.
      * @param fetcher The fetcher to use to retrieve data not in the disk cache.
      * @param loadProvider The load provider containing various encoders and decoders use to decode and encode data.
      * @param transformation The transformation to use to transform the decoded resource.
@@ -145,57 +149,85 @@ public class Engine implements EngineJobListener, MemoryCache.ResourceRemovedLis
                 loadProvider.getSourceDecoder(), transformation, loadProvider.getEncoder(),
                 transcoder, loadProvider.getSourceEncoder());
 
-        EngineResource<?> cached = getFromCache(key);
+        EngineResource<?> cached = loadFromCache(key, isMemoryCacheable);
         if (cached != null) {
-            cached.acquire();
-            activeResources.put(key, new ResourceWeakReference(key, cached, resourceReferenceQueue));
             cb.onResourceReady(cached);
             if (Log.isLoggable(TAG, Log.VERBOSE)) {
-                Log.v(TAG, "loaded resource from cache in " + LogTime.getElapsedMillis(startTime));
+                logWithTimeAndKey("Loaded resource from cache", startTime, key);
             }
             return null;
         }
 
-        WeakReference<EngineResource<?>> activeRef = activeResources.get(key);
-        if (activeRef != null) {
-            EngineResource<?> active = activeRef.get();
-            if (active != null) {
-                active.acquire();
-                cb.onResourceReady(active);
-                if (Log.isLoggable(TAG, Log.VERBOSE)) {
-                    Log.v(TAG, "loaded resource from active resources in " + LogTime.getElapsedMillis(startTime));
-                }
-                return null;
-            } else {
-                activeResources.remove(key);
+        EngineResource<?> active = loadFromActiveResources(key, isMemoryCacheable);
+        if (active != null) {
+            cb.onResourceReady(active);
+            if (Log.isLoggable(TAG, Log.VERBOSE)) {
+                logWithTimeAndKey("Loaded resource from active resources", startTime, key);
             }
+            return null;
         }
 
         EngineJob current = jobs.get(key);
         if (current != null) {
             current.addCallback(cb);
             if (Log.isLoggable(TAG, Log.VERBOSE)) {
-                Log.v(TAG, "added to existing load in " + LogTime.getElapsedMillis(startTime));
+                logWithTimeAndKey("Added to existing load", startTime, key);
             }
             return new LoadStatus(cb, current);
         }
 
         EngineJob engineJob = engineJobFactory.build(key, isMemoryCacheable);
         DecodeJob<T, Z, R> decodeJob = new DecodeJob<T, Z, R>(key, width, height, fetcher, loadProvider, transformation,
-                transcoder, diskCache, diskCacheStrategy, priority);
+                transcoder, diskCacheProvider, diskCacheStrategy, priority);
         EngineRunnable runnable = new EngineRunnable(engineJob, decodeJob, priority);
         jobs.put(key, engineJob);
         engineJob.addCallback(cb);
         engineJob.start(runnable);
 
         if (Log.isLoggable(TAG, Log.VERBOSE)) {
-            Log.v(TAG, "finished load in engine in " + LogTime.getElapsedMillis(startTime));
+            logWithTimeAndKey("Started new load", startTime, key);
         }
         return new LoadStatus(cb, engineJob);
     }
 
+    private static void logWithTimeAndKey(String log, long startTime, Key key) {
+        Log.v(TAG, log + " in " + LogTime.getElapsedMillis(startTime) + "ms, key: " + key);
+    }
+
+    private EngineResource<?> loadFromActiveResources(Key key, boolean isMemoryCacheable) {
+        if (!isMemoryCacheable) {
+            return null;
+        }
+
+        EngineResource<?> active = null;
+        WeakReference<EngineResource<?>> activeRef = activeResources.get(key);
+        if (activeRef != null) {
+            active = activeRef.get();
+            if (active != null) {
+                active.acquire();
+            } else {
+                activeResources.remove(key);
+            }
+        }
+
+        return active;
+    }
+
+    private EngineResource<?> loadFromCache(Key key, boolean isMemoryCacheable) {
+        if (!isMemoryCacheable) {
+            return null;
+        }
+
+        EngineResource<?> cached = getEngineResourceFromCache(key);
+        if (cached != null) {
+            cached.acquire();
+            activeResources.put(key, new ResourceWeakReference(key, cached, getReferenceQueue()));
+        }
+        return cached;
+    }
+
     @SuppressWarnings("unchecked")
-    private EngineResource<?> getFromCache(Key key) {
+    private EngineResource<?> getEngineResourceFromCache(Key key) {
         Resource<?> cached = cache.remove(key);
 
         final EngineResource result;
@@ -211,6 +243,7 @@ public class Engine implements EngineJobListener, MemoryCache.ResourceRemovedLis
     }
 
     public void release(Resource resource) {
+        Util.assertMainThread();
         if (resource instanceof EngineResource) {
             ((EngineResource) resource).release();
         } else {
@@ -221,10 +254,14 @@ public class Engine implements EngineJobListener, MemoryCache.ResourceRemovedLis
     @SuppressWarnings("unchecked")
     @Override
     public void onEngineJobComplete(Key key, EngineResource<?> resource) {
+        Util.assertMainThread();
         // A null resource indicates that the load failed, usually due to an exception.
         if (resource != null) {
             resource.setResourceListener(key, this);
-            activeResources.put(key, new ResourceWeakReference(key, resource, resourceReferenceQueue));
+
+            if (resource.isCacheable()) {
+                activeResources.put(key, new ResourceWeakReference(key, resource, getReferenceQueue()));
+            }
         }
         // TODO: should this check that the engine job is still current?
         jobs.remove(key);
@@ -232,6 +269,7 @@ public class Engine implements EngineJobListener, MemoryCache.ResourceRemovedLis
 
     @Override
     public void onEngineJobCancelled(EngineJob engineJob, Key key) {
+        Util.assertMainThread();
         EngineJob current = jobs.get(key);
         if (engineJob.equals(current)) {
             jobs.remove(key);
@@ -240,36 +278,53 @@ public class Engine implements EngineJobListener, MemoryCache.ResourceRemovedLis
 
     @Override
     public void onResourceRemoved(final Resource<?> resource) {
-        recycleResource(resource);
+        Util.assertMainThread();
+        resourceRecycler.recycle(resource);
     }
 
     @Override
     public void onResourceReleased(Key cacheKey, EngineResource resource) {
+        Util.assertMainThread();
         activeResources.remove(cacheKey);
         if (resource.isCacheable()) {
             cache.put(cacheKey, resource);
         } else {
-            recycleResource(resource);
+            resourceRecycler.recycle(resource);
         }
     }
 
-    private void recycleResource(Resource<?> resource) {
-        // If a resource has sub-resources, releasing a sub resource can cause it's parent to be synchronously
-        // evicted which leads to a recycle loop when the parent the releases it's children. Posting breaks this loops.
-        mainHandler.obtainMessage(ResourceRecyclerCallback.RECYCLE_RESOURCE, resource).sendToTarget();
+    public void clearDiskCache() {
+        diskCacheProvider.getDiskCache().clear();
     }
 
-    private static class ResourceRecyclerCallback implements Handler.Callback {
-        public static final int RECYCLE_RESOURCE = 1;
+    private ReferenceQueue<EngineResource<?>> getReferenceQueue() {
+        if (resourceReferenceQueue == null) {
+            resourceReferenceQueue = new ReferenceQueue<EngineResource<?>>();
+            MessageQueue queue = Looper.myQueue();
+            queue.addIdleHandler(new RefQueueIdleHandler(activeResources, resourceReferenceQueue));
+        }
+        return resourceReferenceQueue;
+    }
+
+    private static class LazyDiskCacheProvider implements DecodeJob.DiskCacheProvider {
+
+        private final DiskCache.Factory factory;
+        private volatile DiskCache diskCache;
+
+        public LazyDiskCacheProvider(DiskCache.Factory factory) {
+            this.factory = factory;
+        }
 
         @Override
-        public boolean handleMessage(Message message) {
-            if (message.what == RECYCLE_RESOURCE) {
-                Resource resource = (Resource) message.obj;
-                resource.recycle();
-                return true;
+        public DiskCache getDiskCache() {
+            if (diskCache == null) {
+                synchronized (this) {
+                    if (diskCache == null) {
+                        diskCache = factory.build();
+                    }
+                }
             }
-            return false;
+            return diskCache;
         }
     }
 

@@ -1,29 +1,34 @@
 package com.bumptech.glide.load.data;
 
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import com.bumptech.glide.Priority;
 import com.bumptech.glide.load.model.GlideUrl;
+import com.bumptech.glide.load.model.Headers;
+import com.bumptech.glide.testutil.TestUtil;
 import com.squareup.okhttp.mockwebserver.MockResponse;
 import com.squareup.okhttp.mockwebserver.MockWebServer;
 import com.squareup.okhttp.mockwebserver.RecordedRequest;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.endsWith;
-import static org.hamcrest.Matchers.equalTo;
-import static org.junit.Assert.fail;
 
 /**
  * Tests {@link com.bumptech.glide.load.data.HttpUrlFetcher} against server responses. Tests for behavior
@@ -31,6 +36,7 @@ import static org.junit.Assert.fail;
  * handling should go here.
  */
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class HttpUrlFetcherServerTest {
     private static final String DEFAULT_PATH = "/fakepath";
 
@@ -59,7 +65,7 @@ public class HttpUrlFetcherServerTest {
                 .setResponseCode(200));
         HttpUrlFetcher fetcher = getFetcher();
         InputStream is = fetcher.loadData(Priority.HIGH);
-        assertThat(isToString(is), equalTo(expected));
+        assertEquals(expected, TestUtil.isToString(is));
     }
 
     @Test
@@ -72,7 +78,7 @@ public class HttpUrlFetcherServerTest {
             .setResponseCode(200)
             .setBody(expected));
         InputStream is = getFetcher().loadData(Priority.LOW);
-        assertThat(isToString(is), equalTo(expected));
+        assertEquals(expected, TestUtil.isToString(is));
     }
 
     @Test
@@ -85,7 +91,7 @@ public class HttpUrlFetcherServerTest {
             .setResponseCode(200)
             .setBody(expected));
         InputStream is = getFetcher().loadData(Priority.LOW);
-        assertThat(isToString(is), equalTo(expected));
+        assertEquals(expected, TestUtil.isToString(is));
     }
 
     @Test
@@ -98,11 +104,11 @@ public class HttpUrlFetcherServerTest {
             .setResponseCode(200)
             .setBody(expected));
         InputStream is = getFetcher().loadData(Priority.NORMAL);
-        assertThat(isToString(is), equalTo(expected));
+        assertEquals(expected, TestUtil.isToString(is));
 
         mockWebServer.takeRequest();
         RecordedRequest second = mockWebServer.takeRequest();
-        assertThat(second.getPath(), endsWith("/redirect"));
+        assertThat(second.getPath()).endsWith("/redirect");
     }
 
     @Test
@@ -119,11 +125,11 @@ public class HttpUrlFetcherServerTest {
             .setResponseCode(200).setBody(expected));
 
         InputStream is = getFetcher().loadData(Priority.NORMAL);
-        assertThat(isToString(is), equalTo(expected));
+        assertEquals(expected, TestUtil.isToString(is));
 
-        assertThat(mockWebServer.takeRequest().getPath(), containsString(DEFAULT_PATH));
+        assertThat(mockWebServer.takeRequest().getPath()).contains(DEFAULT_PATH);
         for (int i = 0; i < numRedirects; i++) {
-            assertThat(mockWebServer.takeRequest().getPath(), containsString(redirectBase + i));
+            assertThat(mockWebServer.takeRequest().getPath()).contains(redirectBase + i);
         }
     }
 
@@ -209,18 +215,27 @@ public class HttpUrlFetcherServerTest {
         }
     }
 
-    private HttpUrlFetcher getFetcher() {
-        URL url = mockWebServer.getUrl(DEFAULT_PATH);
-        return new HttpUrlFetcher(new GlideUrl(url));
+    @Test
+    public void testAppliesHeadersInGlideUrl() throws Exception {
+      mockWebServer.enqueue(new MockResponse().setResponseCode(200));
+      String headerField = "field";
+      String headerValue = "value";
+      Map<String, String> headersMap = new HashMap<String, String>();
+      headersMap.put(headerField, headerValue);
+      Headers headers = mock(Headers.class);
+      when(headers.getHeaders()).thenReturn(headersMap);
+
+      getFetcher(headers).loadData(Priority.HIGH);
+
+      assertThat(mockWebServer.takeRequest().getHeader(headerField)).isEqualTo(headerValue);
     }
 
-    private static String isToString(InputStream is) throws IOException {
-        ByteArrayOutputStream os = new ByteArrayOutputStream();
-        byte[] buffer = new byte[1024];
-        int read;
-        while ((read = is.read(buffer)) != -1) {
-            os.write(buffer, 0, read);
-        }
-        return new String(os.toByteArray());
+    private HttpUrlFetcher getFetcher() {
+        return getFetcher(Headers.NONE);
+    }
+
+    private HttpUrlFetcher getFetcher(Headers headers) {
+        URL url = mockWebServer.getUrl(DEFAULT_PATH);
+        return new HttpUrlFetcher(new GlideUrl(url, headers));
     }
 }

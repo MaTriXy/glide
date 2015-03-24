@@ -1,14 +1,17 @@
 package com.bumptech.glide.load.resource;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-
+@RunWith(JUnit4.class)
 public class NullDecoderTest {
     private NullDecoder decoder;
 

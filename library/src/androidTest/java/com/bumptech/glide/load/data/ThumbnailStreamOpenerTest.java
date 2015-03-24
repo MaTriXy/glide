@@ -1,21 +1,5 @@
 package com.bumptech.glide.load.data;
 
-import android.database.MatrixCursor;
-import android.net.Uri;
-import android.provider.MediaStore;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.Robolectric;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.tester.android.database.SimpleTestCursor;
-import org.robolectric.tester.android.database.TestCursor;
-
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.InputStream;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -24,7 +8,26 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import android.database.MatrixCursor;
+import android.net.Uri;
+import android.provider.MediaStore;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+import org.robolectric.tester.android.database.SimpleTestCursor;
+import org.robolectric.tester.android.database.TestCursor;
+
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.InputStream;
+
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class ThumbnailStreamOpenerTest {
     private Harness harness;
 

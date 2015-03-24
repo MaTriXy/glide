@@ -25,14 +25,14 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+
 import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.prefill.PreFillBitmapAttribute;
+import com.bumptech.glide.load.engine.prefill.PreFillType;
 import com.bumptech.glide.request.FutureTarget;
 import com.bumptech.glide.samples.flickr.api.Api;
 import com.bumptech.glide.samples.flickr.api.Photo;
 
 import java.io.File;
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -89,7 +89,6 @@ public class FlickrSearchActivity extends ActionBarActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Glide.get(this).register(Photo.class, InputStream.class, new FlickrModelLoader.Factory());
         backgroundThread = new HandlerThread("BackgroundThumbnailHandlerThread");
         backgroundThread.start();
         backgroundHandler = new Handler(backgroundThread.getLooper());
@@ -166,9 +165,9 @@ public class FlickrSearchActivity extends ActionBarActivity {
         // Weight values determined experimentally by measuring the number of incurred GCs while scrolling through
         // the various photo grids/lists.
         Glide.get(this).preFillBitmapPool(
-                new PreFillBitmapAttribute(smallGridSize, smallGridSize, 1),
-                new PreFillBitmapAttribute(mediumGridSize, mediumGridSize, 1),
-                new PreFillBitmapAttribute(screenWidth / 2, listHeightSize, 6));
+                new PreFillType.Builder(smallGridSize).setWeight(1),
+                new PreFillType.Builder(mediumGridSize).setWeight(1),
+                new PreFillType.Builder(screenWidth / 2, listHeightSize).setWeight(6));
     }
 
     private int getScreenWidth() {

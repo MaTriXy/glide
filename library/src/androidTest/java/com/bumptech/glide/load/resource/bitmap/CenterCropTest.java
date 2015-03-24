@@ -1,24 +1,30 @@
 package com.bumptech.glide.load.resource.bitmap;
 
-import android.graphics.Bitmap;
-import com.bumptech.glide.load.engine.Resource;
-import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
-import com.bumptech.glide.tests.Util;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.RobolectricTestRunner;
-
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.graphics.Bitmap;
+
+import com.bumptech.glide.load.engine.Resource;
+import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
+import com.bumptech.glide.tests.Util;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class CenterCropTest {
     private CenterCropHarness harness;
 
@@ -68,6 +74,16 @@ public class CenterCropTest {
         harness.centerCrop.transform(harness.resource, 50, 50);
 
         verify(harness.resource, never()).recycle();
+    }
+
+    @Test
+    public void testAsksBitmapPoolForArgb8888IfInConfigIsNull() {
+        Robolectric.shadowOf(harness.bitmap).setConfig(null);
+
+        harness.centerCrop.transform(harness.resource, 10, 10);
+
+        verify(harness.pool).get(anyInt(), anyInt(), eq(Bitmap.Config.ARGB_8888));
+        verify(harness.pool, never()).get(anyInt(), anyInt(), (Bitmap.Config) isNull());
     }
 
     @Test

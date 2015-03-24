@@ -1,10 +1,5 @@
 package com.bumptech.glide.load;
 
-import com.bumptech.glide.load.engine.Resource;
-import org.junit.Test;
-
-import java.util.ArrayList;
-
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
@@ -14,6 +9,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.bumptech.glide.load.engine.Resource;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+import java.util.ArrayList;
+
+@RunWith(JUnit4.class)
 public class MultiTransformationTest {
     @Test
     public void testReturnsConcatenatedTransformationIds() {

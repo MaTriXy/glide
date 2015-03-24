@@ -5,6 +5,8 @@ import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Looper;
 
+import com.bumptech.glide.request.target.Target;
+
 import java.util.ArrayDeque;
 import java.util.Queue;
 
@@ -26,14 +28,18 @@ public final class Util {
      * Returns the hex string of the given byte array representing a SHA256 hash.
      */
     public static String sha256BytesToHex(byte[] bytes) {
-        return bytesToHex(bytes, SHA_256_CHARS);
+        synchronized (SHA_256_CHARS) {
+            return bytesToHex(bytes, SHA_256_CHARS);
+        }
     }
 
     /**
      * Returns the hex string of the given byte array representing a SHA1 hash.
      */
     public static String sha1BytesToHex(byte[] bytes) {
-        return bytesToHex(bytes, SHA_1_CHARS);
+        synchronized (SHA_1_CHARS) {
+            return bytesToHex(bytes, SHA_1_CHARS);
+        }
     }
 
     // Taken from:
@@ -53,7 +59,8 @@ public final class Util {
      *
      * @see #getBitmapByteSize(android.graphics.Bitmap)
      *
-     * @deprecated
+     * @deprecated Use {@link #getBitmapByteSize(android.graphics.Bitmap)} instead. Scheduled to be removed in Glide
+     * 4.0.
      */
     @Deprecated
     public static int getSize(Bitmap bitmap) {
@@ -104,6 +111,17 @@ public final class Util {
                 bytesPerPixel = 4;
         }
         return bytesPerPixel;
+    }
+
+    /**
+     * Returns true if width and height are both > 0 and/or equal to {@link Target#SIZE_ORIGINAL}.
+     */
+    public static boolean isValidDimensions(int width, int height) {
+        return isValidDimension(width) && isValidDimension(height);
+    }
+
+    private static boolean isValidDimension(int dimen) {
+        return dimen > 0 || dimen == Target.SIZE_ORIGINAL;
     }
 
     /**

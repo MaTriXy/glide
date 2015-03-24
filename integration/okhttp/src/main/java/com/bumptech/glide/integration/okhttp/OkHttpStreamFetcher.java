@@ -8,6 +8,7 @@ import com.squareup.okhttp.Request;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Map;
 
 /**
  * Fetches an {@link InputStream} using the okhttp library.
@@ -15,7 +16,6 @@ import java.io.InputStream;
 public class OkHttpStreamFetcher implements DataFetcher<InputStream> {
     private final OkHttpClient client;
     private final GlideUrl url;
-    private volatile Request request;
     private InputStream stream;
 
     public OkHttpStreamFetcher(OkHttpClient client, GlideUrl url) {
@@ -25,9 +25,12 @@ public class OkHttpStreamFetcher implements DataFetcher<InputStream> {
 
     @Override
     public InputStream loadData(Priority priority) throws Exception {
-        request = new Request.Builder()
-                .url(url.toString())
-                .build();
+        Request.Builder requestBuilder = new Request.Builder()
+                .url(url.toStringUrl());
+        for (Map.Entry<String, String> headerEntry : url.getHeaders().entrySet()) {
+          requestBuilder.addHeader(headerEntry.getKey(), headerEntry.getValue());
+        }
+        Request request = requestBuilder.build();
 
         stream = client.newCall(request)
                 .execute()
@@ -50,13 +53,11 @@ public class OkHttpStreamFetcher implements DataFetcher<InputStream> {
 
     @Override
     public String getId() {
-        return url.toString();
+        return url.getCacheKey();
     }
 
     @Override
     public void cancel() {
-        if (request != null) {
-            client.cancel(request);
-        }
+        // TODO: call cancel on the client when this method is called on a background thread. See #257
     }
 }

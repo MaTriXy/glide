@@ -1,16 +1,20 @@
 package com.bumptech.glide.load.engine.cache;
 
+import static org.junit.Assert.assertTrue;
+
 import com.bumptech.glide.load.Key;
+
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 import java.io.UnsupportedEncodingException;
 import java.security.MessageDigest;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.junit.Assert.assertTrue;
-
+@RunWith(JUnit4.class)
 public class KeyGeneratorTest {
     private SafeKeyGenerator keyGenerator;
     private int nextId;

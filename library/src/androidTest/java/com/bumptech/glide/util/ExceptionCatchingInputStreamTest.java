@@ -1,13 +1,5 @@
 package com.bumptech.glide.util;
 
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.SocketTimeoutException;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -19,14 +11,27 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.bumptech.glide.load.resource.bitmap.RecyclableBufferedInputStream;
+
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.SocketTimeoutException;
+
+@RunWith(JUnit4.class)
 public class ExceptionCatchingInputStreamTest {
 
-    private InputStream wrapped;
+    private RecyclableBufferedInputStream wrapped;
     private ExceptionCatchingInputStream is;
 
     @Before
     public void setUp() throws Exception {
-        wrapped = mock(InputStream.class);
+        wrapped = mock(RecyclableBufferedInputStream.class);
         is = new ExceptionCatchingInputStream();
         is.setInputStream(wrapped);
     }

@@ -1,5 +1,12 @@
 package com.bumptech.glide.manager;
 
+import static org.junit.Assert.assertEquals;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
 import android.app.Activity;
 import android.support.v4.app.FragmentActivity;
 
@@ -14,14 +21,8 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 import org.robolectric.util.ActivityController;
 
-import static org.junit.Assert.assertEquals;
-import static org.mockito.Matchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-
 @RunWith(RobolectricTestRunner.class)
-@Config(manifest = Config.NONE)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class RequestManagerFragmentTest {
     private static final String TAG = "tag";
     private Harness[] harnesses;
@@ -103,6 +104,60 @@ public class RequestManagerFragmentTest {
         });
     }
 
+    @Test
+    public void testCallsRequestManagerOnLowMemory() {
+        runTest(new TestCase() {
+            @Override
+            public void runTest(Harness harness) {
+                RequestManager requestManager = mock(RequestManager.class);
+                harness.setRequestManager(requestManager);
+                harness.onLowMemory();
+                verify(requestManager).onLowMemory();
+            }
+        });
+    }
+
+    @Test
+    public void testNonSupportFragmentCallsOnTrimMemory() {
+      RequestManagerHarness requestManagerHarness = new RequestManagerHarness();
+      int level = 100;
+      RequestManager requestManager = mock(RequestManager.class);
+      requestManagerHarness.setRequestManager(requestManager);
+      requestManagerHarness.onTrimMemory(level);
+      verify(requestManager).onTrimMemory(eq(level));
+    }
+
+    @Test
+    public void testOnLowMemoryCallOnNullRequestManagerDoesNotCrash() {
+        runTest(new TestCase() {
+            @Override
+            public void runTest(Harness harness) {
+                harness.onLowMemory();
+            }
+        });
+    }
+
+    @Test
+    public void testOnTrimMemoryCallOnNullRequestManagerDoesNotCrash() {
+        runTest(new TestCase() {
+            @Override
+            public void runTest(Harness harness) {
+                harness.onTrimMemory(100 /*level*/);
+            }
+        });
+    }
+
+    @Test
+    public void testNonSupportFragmentCallsRequestManagerOnTrimMemory() {
+        RequestManagerHarness requestManagerHarness = new RequestManagerHarness();
+        RequestManager requestManager = mock(RequestManager.class);
+        requestManagerHarness.setRequestManager(requestManager);
+        int level = 123;
+        requestManagerHarness.fragment.onTrimMemory(level);
+
+        verify(requestManager).onTrimMemory(eq(level));
+    }
+
     private void runTest(TestCase testCase) {
         for (Harness harness : harnesses) {
             try {
@@ -127,6 +182,10 @@ public class RequestManagerFragmentTest {
         public ActivityFragmentLifecycle getFragmentLifecycle();
 
         public ActivityController getController();
+
+        public void onLowMemory();
+
+        public void onTrimMemory(int level);
     }
 
     private static class RequestManagerHarness implements Harness {
@@ -173,6 +232,16 @@ public class RequestManagerFragmentTest {
         @Override
         public ActivityController getController() {
             return controller;
+        }
+
+        @Override
+        public void onLowMemory() {
+          fragment.onLowMemory();
+        }
+
+        @Override
+        public void onTrimMemory(int level) {
+          fragment.onTrimMemory(level);
         }
     }
 
@@ -221,6 +290,16 @@ public class RequestManagerFragmentTest {
         @Override
         public ActivityController getController() {
             return supportController;
+        }
+
+        @Override
+        public void onLowMemory() {
+          supportFragment.onLowMemory();
+        }
+
+        @Override
+        public void onTrimMemory(int level) {
+            // Do nothing.
         }
     }
 }

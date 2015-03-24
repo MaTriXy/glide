@@ -1,16 +1,20 @@
 package com.bumptech.glide.load.resource.gifbitmap;
 
-import android.graphics.Bitmap;
-import com.bumptech.glide.load.ResourceEncoder;
-import com.bumptech.glide.load.resource.gif.GifDrawable;
-import org.junit.Before;
-import org.junit.Test;
-
-import static org.hamcrest.Matchers.containsString;
-import static org.junit.Assert.assertThat;
+import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import android.graphics.Bitmap;
+
+import com.bumptech.glide.load.ResourceEncoder;
+import com.bumptech.glide.load.resource.gif.GifDrawable;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
+
+@RunWith(JUnit4.class)
 public class GifBitmapWrapperResourceEncoderTest {
     private ResourceEncoder<Bitmap> bitmapEncoder;
     private ResourceEncoder<GifDrawable> gifEncoder;
@@ -32,7 +36,7 @@ public class GifBitmapWrapperResourceEncoderTest {
         when(gifEncoder.getId()).thenReturn(gifId);
 
         String id = encoder.getId();
-        assertThat(id, containsString(bitmapId));
-        assertThat(id, containsString(gifId));
+        assertThat(id).contains(bitmapId);
+        assertThat(id).contains(gifId);
     }
 }

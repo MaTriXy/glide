@@ -1,30 +1,31 @@
 package com.bumptech.glide.manager;
 
-import android.content.BroadcastReceiver;
-import android.content.Context;
-import android.content.Intent;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.robolectric.Robolectric;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.shadows.ShadowConnectivityManager;
-import org.robolectric.shadows.ShadowNetworkInfo;
-
-import java.util.List;
-
-import static org.hamcrest.Matchers.empty;
-import static org.hamcrest.Matchers.hasSize;
-import static org.junit.Assert.assertThat;
+import static com.google.common.truth.Truth.assertThat;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+import org.robolectric.shadows.ShadowConnectivityManager;
+import org.robolectric.shadows.ShadowNetworkInfo;
+
+import java.util.List;
+
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class DefaultConnectivityMonitorTest {
     private ConnectivityMonitor.ConnectivityListener listener;
     private DefaultConnectivityMonitor monitor;
@@ -39,7 +40,7 @@ public class DefaultConnectivityMonitorTest {
     public void testRegistersReceiverOnStart() {
         monitor.onStart();
 
-        assertThat(getConnectivityReceivers(), hasSize(1));
+        assertThat(getConnectivityReceivers()).hasSize(1);
     }
 
     @Test
@@ -47,7 +48,7 @@ public class DefaultConnectivityMonitorTest {
         monitor.onStart();
         monitor.onStart();
 
-        assertThat(getConnectivityReceivers(), hasSize(1));
+        assertThat(getConnectivityReceivers()).hasSize(1);
     }
 
     @Test
@@ -55,7 +56,7 @@ public class DefaultConnectivityMonitorTest {
         monitor.onStart();
         monitor.onStop();
 
-        assertThat(getConnectivityReceivers(), empty());
+        assertThat(getConnectivityReceivers()).isEmpty();
     }
 
     @Test
@@ -63,7 +64,7 @@ public class DefaultConnectivityMonitorTest {
         monitor.onStop();
         monitor.onStop();
 
-        assertThat(getConnectivityReceivers(), empty());
+        assertThat(getConnectivityReceivers()).isEmpty();
     }
 
     @Test

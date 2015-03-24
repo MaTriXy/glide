@@ -3,11 +3,11 @@ package com.bumptech.glide.load.resource.gif;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.util.Log;
+
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.gifdecoder.GifDecoder;
 import com.bumptech.glide.gifdecoder.GifHeader;
 import com.bumptech.glide.gifdecoder.GifHeaderParser;
-import com.bumptech.glide.load.DecodeFormat;
 import com.bumptech.glide.load.ResourceDecoder;
 import com.bumptech.glide.load.Transformation;
 import com.bumptech.glide.load.engine.bitmap_recycle.BitmapPool;
@@ -17,10 +17,7 @@ import com.bumptech.glide.util.Util;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.Queue;
-import java.util.UUID;
 
 /**
  * An {@link com.bumptech.glide.load.ResourceDecoder} that decodes
@@ -34,7 +31,6 @@ public class GifResourceDecoder implements ResourceDecoder<InputStream, GifDrawa
     private final Context context;
     private final GifHeaderParserPool parserPool;
     private final BitmapPool bitmapPool;
-    private final DecodeFormat decodeFormat;
     private final GifDecoderPool decoderPool;
     private final GifBitmapProvider provider;
 
@@ -42,24 +38,15 @@ public class GifResourceDecoder implements ResourceDecoder<InputStream, GifDrawa
         this(context, Glide.get(context).getBitmapPool());
     }
 
-    public GifResourceDecoder(Context context, DecodeFormat decodeFormat) {
-        this(context, Glide.get(context).getBitmapPool(), decodeFormat);
-    }
-
     public GifResourceDecoder(Context context, BitmapPool bitmapPool) {
-        this(context, bitmapPool, DecodeFormat.DEFAULT);
-    }
-
-    public GifResourceDecoder(Context context, BitmapPool bitmapPool, DecodeFormat decodeFormat) {
-        this(context, bitmapPool, decodeFormat, PARSER_POOL, DECODER_POOL);
+        this(context, bitmapPool, PARSER_POOL, DECODER_POOL);
     }
 
     // Visible for testing.
-    GifResourceDecoder(Context context, BitmapPool bitmapPool, DecodeFormat decodeFormat,
-            GifHeaderParserPool parserPool, GifDecoderPool decoderPool) {
+    GifResourceDecoder(Context context, BitmapPool bitmapPool, GifHeaderParserPool parserPool,
+            GifDecoderPool decoderPool) {
         this.context = context;
         this.bitmapPool = bitmapPool;
-        this.decodeFormat = decodeFormat;
         this.decoderPool = decoderPool;
         this.provider = new GifBitmapProvider(bitmapPool);
         this.parserPool = parserPool;
@@ -70,8 +57,6 @@ public class GifResourceDecoder implements ResourceDecoder<InputStream, GifDrawa
         byte[] data = inputStreamToBytes(source);
         final GifHeaderParser parser = parserPool.obtain(data);
         final GifDecoder decoder = decoderPool.obtain(provider);
-        decoder.setPreferredConfig(decodeFormat == DecodeFormat.PREFER_RGB_565
-                ? Bitmap.Config.RGB_565 : Bitmap.Config.ARGB_8888);
         try {
             return decode(data, width, height, parser, decoder);
         } finally {
@@ -87,18 +72,21 @@ public class GifResourceDecoder implements ResourceDecoder<InputStream, GifDrawa
             return null;
         }
 
-        String id = getGifId(data);
-        Bitmap firstFrame = decodeFirstFrame(decoder, id, header, data);
+        Bitmap firstFrame = decodeFirstFrame(decoder, header, data);
+        if (firstFrame == null) {
+            return null;
+        }
+
         Transformation<Bitmap> unitTransformation = UnitTransformation.get();
 
-        GifDrawable gifDrawable = new GifDrawable(context, provider, bitmapPool, unitTransformation, width, height, id,
+        GifDrawable gifDrawable = new GifDrawable(context, provider, bitmapPool, unitTransformation, width, height,
                 header, data, firstFrame);
 
         return new GifDrawableResource(gifDrawable);
     }
 
-    private Bitmap decodeFirstFrame(GifDecoder decoder, String id, GifHeader header, byte[] data) {
-        decoder.setData(id, header, data);
+    private Bitmap decodeFirstFrame(GifDecoder decoder, GifHeader header, byte[] data) {
+        decoder.setData(header, data);
         decoder.advance();
         return decoder.getNextFrame();
     }
@@ -106,20 +94,6 @@ public class GifResourceDecoder implements ResourceDecoder<InputStream, GifDrawa
     @Override
     public String getId() {
         return "";
-    }
-
-    // A best effort attempt to get a unique id that can be used as a cache key for frames of the decoded GIF.
-    private static String getGifId(byte[] data) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-1");
-            digest.update(data);
-            return Util.sha1BytesToHex(digest.digest());
-        } catch (NoSuchAlgorithmException e) {
-            if (Log.isLoggable(TAG, Log.WARN)) {
-                Log.w(TAG, "Missing sha1 algorithm?", e);
-            }
-        }
-        return UUID.randomUUID().toString();
     }
 
     private static byte[] inputStreamToBytes(InputStream is) {
@@ -170,6 +144,7 @@ public class GifResourceDecoder implements ResourceDecoder<InputStream, GifDrawa
         }
 
         public synchronized void release(GifHeaderParser parser) {
+            parser.clear();
             pool.offer(parser);
         }
     }

@@ -1,27 +1,9 @@
 package com.bumptech.glide.load.resource.bitmap;
 
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.ColorFilter;
-import android.graphics.LightingColorFilter;
-import android.graphics.Paint;
-import android.graphics.PixelFormat;
-import android.graphics.Rect;
-import android.graphics.drawable.Drawable;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-import org.robolectric.Robolectric;
-import org.robolectric.RobolectricTestRunner;
-
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.instanceOf;
+import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Matchers.isNull;
@@ -30,7 +12,26 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.ColorFilter;
+import android.graphics.LightingColorFilter;
+import android.graphics.Paint;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
+
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+import org.robolectric.Robolectric;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+
 @RunWith(RobolectricTestRunner.class)
+@Config(manifest = Config.NONE, emulateSdk = 18)
 public class GlideBitmapDrawableTest {
 
     private Bitmap bitmap;
@@ -84,7 +85,7 @@ public class GlideBitmapDrawableTest {
     @Test
     public void testConstantStateReturnsNewGlideBitmapDrawable() {
         Drawable newDrawable = drawable.getConstantState().newDrawable();
-        assertThat(newDrawable, instanceOf(GlideBitmapDrawable.class));
+        assertThat(newDrawable).isInstanceOf(GlideBitmapDrawable.class);
     }
 
     @Test
@@ -96,7 +97,7 @@ public class GlideBitmapDrawableTest {
     @Test
     public void testMutatedDrawableIsGlideBitmapDrawable() {
         Drawable newDrawable = drawable.mutate();
-        assertThat(newDrawable, instanceOf(GlideBitmapDrawable.class));
+        assertThat(newDrawable).isInstanceOf(GlideBitmapDrawable.class);
     }
 
     @Test
@@ -116,7 +117,7 @@ public class GlideBitmapDrawableTest {
         Drawable mutated = drawable.mutate();
         mutated.draw(canvas);
 
-        assertThat(mutated.getBounds(), equalTo(bounds));
+        assertEquals(bounds, mutated.getBounds());
         verify(canvas, times(2)).drawBitmap(eq(bitmap), isNull(Rect.class), eq(bounds), any(Paint.class));
     }
 
@@ -132,7 +133,7 @@ public class GlideBitmapDrawableTest {
             @Override
             public Object answer(InvocationOnMock invocation) throws Throwable {
                 Paint paint = (Paint) invocation.getArguments()[3];
-                assertThat(paint.getAlpha(), equalTo(1));
+                assertEquals(1, paint.getAlpha());
                 return null;
             }
         }).when(canvas).drawBitmap(any(Bitmap.class), any(Rect.class), any(Rect.class), any(Paint.class));
@@ -154,7 +155,7 @@ public class GlideBitmapDrawableTest {
             @Override
             public Object answer(InvocationOnMock invocation) throws Throwable {
                 Paint paint = (Paint) invocation.getArguments()[3];
-                assertThat(paint.getColorFilter(), equalTo(originalColorFilter));
+                assertEquals(originalColorFilter, paint.getColorFilter());
                 return null;
             }
         }).when(canvas).drawBitmap(any(Bitmap.class), any(Rect.class), any(Rect.class), any(Paint.class));
