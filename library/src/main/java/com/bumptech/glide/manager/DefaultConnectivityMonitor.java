@@ -1,73 +1,46 @@
 package com.bumptech.glide.manager;
 
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.net.ConnectivityManager;
-import android.net.NetworkInfo;
+import androidx.annotation.NonNull;
+import com.bumptech.glide.util.Synthetic;
 
-class DefaultConnectivityMonitor implements ConnectivityMonitor {
-    private final Context context;
-    private final ConnectivityListener listener;
+/**
+ * An Android Lifecycle wrapper that uses {@link SingletonConnectivityReceiver} to observer
+ * connectivity changes, allowing for registration to be removed when our listener is being
+ * destroyed as part of the Android lifecycle.
+ */
+final class DefaultConnectivityMonitor implements ConnectivityMonitor {
+  private final Context context;
 
-    private boolean isConnected;
-    private boolean isRegistered;
+  @SuppressWarnings("WeakerAccess")
+  @Synthetic
+  final ConnectivityListener listener;
 
-    private final BroadcastReceiver connectivityReceiver = new BroadcastReceiver() {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            boolean wasConnected = isConnected;
-            isConnected = isConnected(context);
-            if (wasConnected != isConnected) {
-                listener.onConnectivityChanged(isConnected);
-            }
-        }
-    };
+  DefaultConnectivityMonitor(@NonNull Context context, @NonNull ConnectivityListener listener) {
+    this.context = context.getApplicationContext();
+    this.listener = listener;
+  }
 
-    public DefaultConnectivityMonitor(Context context, ConnectivityListener listener) {
-        this.context = context.getApplicationContext();
-        this.listener = listener;
-    }
+  private void register() {
+    SingletonConnectivityReceiver.get(context).register(listener);
+  }
 
-    private void register() {
-        if (isRegistered) {
-            return;
-        }
+  private void unregister() {
+    SingletonConnectivityReceiver.get(context).unregister(listener);
+  }
 
-        isConnected = isConnected(context);
-        context.registerReceiver(connectivityReceiver, new IntentFilter(ConnectivityManager.CONNECTIVITY_ACTION));
-        isRegistered = true;
-    }
+  @Override
+  public void onStart() {
+    register();
+  }
 
-    private void unregister() {
-        if (!isRegistered) {
-            return;
-        }
+  @Override
+  public void onStop() {
+    unregister();
+  }
 
-        context.unregisterReceiver(connectivityReceiver);
-        isRegistered = false;
-    }
-
-    private boolean isConnected(Context context) {
-        ConnectivityManager connectivityManager =
-                (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
-        return networkInfo != null && networkInfo.isConnected();
-    }
-
-    @Override
-    public void onStart() {
-        register();
-    }
-
-    @Override
-    public void onStop() {
-        unregister();
-    }
-
-    @Override
-    public void onDestroy() {
-        // Do nothing.
-    }
+  @Override
+  public void onDestroy() {
+    // Do nothing.
+  }
 }

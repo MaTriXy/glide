@@ -1,23 +1,32 @@
 apply plugin: 'com.android.application'
 
 dependencies {
-    compile project(':library')
-    compile "com.android.support:support-v4:${SUPPORT_V4_VERSION}"
-    compile "com.android.support:appcompat-v7:${SUPPORT_V7_VERSION}"
-    compile "com.mcxiaoke.volley:library:${VOLLEY_VERSION}"
+    implementation project(':library')
+    implementation(project(':integration:recyclerview')) {
+        transitive = false
+    }
+    annotationProcessor project(':annotation:compiler')
+
+    implementation libs.androidx.appcompat
+    implementation libs.volley
+    implementation libs.androidx.recyclerview
 }
 
 android {
-    compileSdkVersion COMPILE_SDK_VERSION as int
-    buildToolsVersion BUILD_TOOLS_VERSION
+    namespace 'com.bumptech.glide.samples.flickr'
+    compileSdkVersion libs.versions.compile.sdk.version.get()
 
     defaultConfig {
-        applicationId 'com.bumptech.glide.samples.flickr'
-        minSdkVersion MIN_SDK_VERSION as int
-        targetSdkVersion TARGET_SDK_VERSION as int
+        minSdk libs.versions.min.sdk.version.get() as int
+        targetSdk libs.versions.target.sdk.version.get() as int
 
         versionCode 1
-        versionName '1.0.0'
+        versionName '1.0'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 }
 

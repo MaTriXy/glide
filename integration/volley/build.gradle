@@ -1,34 +1,37 @@
 apply plugin: 'com.android.library'
-apply plugin: 'robolectric'
-
-repositories {
-  mavenCentral()
-}
 
 dependencies {
-    compile project(':glide')
-    compile "com.mcxiaoke.volley:library:${VOLLEY_VERSION}"
+    implementation project(':library')
+    api libs.volley
+    api libs.androidx.annotation
+    annotationProcessor project(':annotation:compiler')
 
-    androidTestCompile project(":testutil")
-    androidTestCompile "com.google.truth:truth:${TRUTH_VERSION}"
-    androidTestCompile "junit:junit:${JUNIT_VERSION}"
-    androidTestCompile "org.mockito:mockito-all:${MOCKITO_VERSION}"
-    androidTestCompile "org.robolectric:robolectric:${ROBOLECTRIC_VERSION}"
-    // TODO: increase this to 2.0.+ when we compile against Java 7.
-    androidTestCompile "com.squareup.okhttp:mockwebserver:${MOCKWEBSERVER_VERSION}"
+    testImplementation project(":testutil")
+    testImplementation libs.truth
+    testImplementation libs.junit
+    testImplementation libs.mockito
+    testImplementation libs.robolectric
+    testImplementation libs.mockwebserver
+    testImplementation libs.androidx.test.core
+    testImplementation libs.androidx.junit
+    testImplementation libs.androidx.test.runner
 }
 
 android {
-    compileSdkVersion COMPILE_SDK_VERSION as int
-    buildToolsVersion BUILD_TOOLS_VERSION
+    namespace 'com.bumptech.glide.integration.volley'
+    compileSdkVersion libs.versions.compile.sdk.version.get()
 
     defaultConfig {
-        minSdkVersion MIN_SDK_VERSION as int
-        targetSdkVersion TARGET_SDK_VERSION as int
+        minSdk libs.versions.min.sdk.version.get() as int
+        targetSdk libs.versions.target.sdk.version.get() as int
 
-        versionCode = VERSION_CODE
-        versionName = VERSION_NAME
+        versionName VERSION_NAME as String
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 }
 
-apply from: "$rootProject.projectDir/scripts/upload.gradle"
+apply from: "${rootProject.projectDir}/scripts/upload.gradle"

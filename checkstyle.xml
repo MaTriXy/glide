@@ -14,6 +14,11 @@
         <property name="message" value="Line has trailing spaces."/>
     </module>
 
+    <!-- Ensure trailling newline for compatibility -->
+    <module name="NewlineAtEndOfFile">
+        <property name="lineSeparator" value="lf"/>
+    </module>
+
     <!-- Space after 'for' and 'if' -->
     <module name="RegexpSingleline">
         <property name="format" value="^\s*(for|if)\b[^ ]"/>
@@ -25,8 +30,10 @@
         <property name="format" value="^\s*for \(.*?([^ ]:|:[^ ])"/>
         <property name="message" value="Space needed around ':' character."/>
     </module>
-
+    <module name="SuppressWarningsFilter" />
     <module name="TreeWalker">
+        <module name="SuppressWarningsHolder" />
+
         <!-- Checks for uncommented main() methods (debugging leftovers). -->
         <!-- Checks that long constants are defined with an upper ell. -->
         <!-- See http://checkstyle.sourceforge.net/config_misc.html#UpperEll -->
@@ -66,8 +73,6 @@
         <module name="StaticVariableName" />
         <module name="TypeName" />
 
-        <module name="TrailingComment" />
-
         <!-- Checks for imports. -->
         <!-- See http://checkstyle.sourceforge.net/config_imports.html -->
         <module name="AvoidStarImport"/>
@@ -86,33 +91,8 @@
         <!-- Prevent importing Mockito matchers directly -->
         <module name="IllegalImport">
             <property name="illegalPkgs" value="org.mockito.internal" />
-            <message key="import.illegal" value="Import from illegal package - {0}. Use org.mockito.Matchers to instantiate argument matchers; or org.hamcrest.Matchers for assertThat." />
+            <message key="import.illegal" value="Import from illegal package - {0}. Use org.mockito.Matchers to instantiate argument matchers." />
         </module>
-        <module name="ImportOrder">
-          <!-- Checks for out of order import statements. -->
-
-           <property name="severity" value="error"/>
-           <property name="groups" value="com.google,*,java,javax"/>
-           <!-- This ensures that static imports go first. -->
-           <property name="option" value="top"/>
-           <property name="tokens" value="STATIC_IMPORT, IMPORT"/>
-         </module>
-
-        <!-- Checks for whitespace. -->
-        <!-- See http://checkstyle.sourceforge.net/config_whitespace.html -->
-        <module name="GenericWhitespace" />
-        <module name="MethodParamPad" />
-        <module name="NoWhitespaceAfter">
-            <property name="tokens"
-                      value="BNOT, DEC, DOT, INC, LNOT, UNARY_MINUS, UNARY_PLUS" />
-        </module>
-        <module name="NoWhitespaceBefore" />
-        <module name="OperatorWrap" />
-        <module name="ParenPad" />
-        <module name="TypecastParenPad" />
-        <module name="WhitespaceAfter" />
-        <module name="WhitespaceAround" />
-
 
         <!-- Modifier Checks. -->
         <!-- See http://checkstyle.sourceforge.net/config_modifier.html -->
@@ -120,7 +100,9 @@
 
         <!-- Checks for blocks. -->
         <!-- See http://checkstyle.sourceforge.net/config_blocks.html -->
-        <module name="AvoidNestedBlocks" />
+        <module name="AvoidNestedBlocks">
+            <property name="allowInSwitchCase" value="true" />
+        </module>
         <module name="EmptyBlock" >
             <property name="option" value="text"/>
         </module>
@@ -129,7 +111,7 @@
         <module name="LeftCurly" />
         <module name="RightCurly">
             <property name="tokens"
-                      value="LITERAL_TRY, LITERAL_CATCH, LITERAL_FINALLY, LITERAL_ELSE" />
+              value="LITERAL_TRY, LITERAL_CATCH, LITERAL_FINALLY, LITERAL_ELSE" />
         </module>
 
         <!-- Checks for common coding problems. -->
@@ -141,17 +123,11 @@
         <module name="NoClone" />
         <module name="NoFinalizer" />
         <module name="OneStatementPerLine" />
-        <module name="RedundantThrows" >
-            <property name="suppressLoadErrors" value="true" />
-        </module>
         <module name="IllegalInstantiation"/>
         <module name="SimplifyBooleanExpression" />
         <module name="SimplifyBooleanReturn" />
         <module name="StringLiteralEquality" />
         <module name="UnnecessaryParentheses" />
-        <module name="LineLength">
-            <property name="max" value="120" />
-        </module>
 
         <!-- Checks for class design. -->
         <!-- See http://checkstyle.sourceforge.net/config_design.html -->
